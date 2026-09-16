@@ -39,6 +39,8 @@ struct ReturnPolicy {
 
 struct RuntimeEvent: Identifiable {
     let id = UUID()
-    let date = Date()
+    let date: Date
     let message: String
+
+    init(message: String, date: Date = Date()) { self.message = message; self.date = date }
 }

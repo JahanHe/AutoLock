@@ -4,6 +4,7 @@ import CoreBluetooth
 import ServiceManagement
 import UserNotifications
 import LocalAuthentication
+import UniformTypeIdentifiers
 
 extension AppDelegate {
     var status: ConnectionStatus {
@@ -114,7 +115,9 @@ extension AppDelegate {
         if !prefs.bool(forKey: "showStatusIcon") && !prefs.bool(forKey: "showStatusLight") {
             prefs.set(true, forKey: key == "showStatusIcon" ? "showStatusLight" : "showStatusIcon")
         }
-        if key == "passiveMode", !isPreview { ble.setPassiveMode(enabled) }
+        if key == "passiveMode" {
+            if isPreview { ble.passiveMode = enabled } else { ble.setPassiveMode(enabled) }
+        }
         if key == "lockNotifications", enabled, !isPreview {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { allowed, _ in
                 DispatchQueue.main.async { self.recordEvent(allowed ? "锁定通知权限已允许。" : "通知权限未允许，锁定功能仍正常工作。") }
@@ -350,6 +353,51 @@ extension AppDelegate {
         return count
     }
 
+    var sourceRevision: String { Bundle.main.object(forInfoDictionaryKey: "MacAutolockSourceRevision") as? String ?? "未记录（本地构建）" }
+    var buildDescription: String {
+        "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "未知")（构建 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "未知")）"
+    }
+
+    func clearDiagnosticLog() {
+        do {
+            if !isPreview { try diagnosticLog.clear() }
+            events.removeAll()
+            diagnosticStatus = "运行记录已清空。后续事件将继续记录。"
+            refreshStatus()
+        } catch { diagnosticStatus = "无法清空日志：\(error.localizedDescription)"; refreshStatus() }
+    }
+
+    func exportDiagnostics() {
+        guard !isPreview else { feedback = "演示模式不读取真实运行日志；安装后的运行记录页面可以导出诊断包。"; refreshStatus(); return }
+        let panel = NSSavePanel()
+        panel.title = "导出诊断包"
+        panel.message = "包含中文事件、系统版本、功能设置和源码版本，不包含密码；设备名称可能出现在事件中。文件不会自动上传。"
+        panel.allowedContentTypes = [.zip]
+        panel.nameFieldStringValue = "MacAutolock-诊断.zip"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        var settings: [String: Any] = [:]
+        for key in ["passiveMode", "wakeWithoutUnlocking", "watchCompatible", "wakeOnProximity", "sleepDisplay", "screensaver", "pauseItunes", "resumeMedia", "lockNotifications", "checkUpdates", "showSettingsOnLaunch", "showStatusLight", "showStatusIcon", "showStatusRSSI"] {
+            settings[optionName(key)] = prefs.bool(forKey: key)
+        }
+        settings["自动锁定"] = ble.lockRSSI != ble.LOCK_DISABLED
+        settings["靠近动作"] = ble.unlockRSSI != ble.UNLOCK_DISABLED
+        settings["远离门槛"] = ble.lockRSSI
+        settings["靠近门槛"] = ble.unlockRSSI
+        settings["远离确认秒数"] = ble.proximityTimeout
+        settings["失联超时秒数"] = ble.signalTimeout
+        let summary: [String: Any] = ["应用版本": buildDescription, "源码提交": sourceRevision,
+            "源码仓库": "https://github.com/JahanHe/MacAutolock", "系统版本": ProcessInfo.processInfo.operatingSystemVersionString,
+            "监测状态": status.title, "采样方式": monitorModeDescription, "屏幕已锁定": screenLocked,
+            "辅助功能权限": accessibilityGranted, "密码是否已保存": hasPassword,
+            "最近操作错误": lastActionError ?? "暂无", "日志状态": diagnosticStatus, "功能设置": settings]
+        do {
+            try diagnosticLog.export(to: destination, summary: summary, events: events)
+            feedback = "诊断包已导出。请把包和复现过程带回这个 Codex 任务，即可对照源码继续排查。"
+            recordEvent("用户已导出诊断包，文件未自动上传。")
+        } catch { feedback = "诊断包导出失败：\(error.localizedDescription)"; recordEvent(feedback) }
+        refreshStatus()
+    }
+
     func configurePreviewCapture() {
         guard isPreview else { return }
         let args = ProcessInfo.processInfo.arguments
@@ -408,7 +456,7 @@ enum SettingsPage: String, CaseIterable {
         case .device: return "选择随身设备，让信号告诉 Mac 你是否在附近。"
         case .lock: return "优先守住离开后的屏幕锁定。"
         case .returning: return "唤醒与密码解锁分别控制，兼容系统 Apple Watch 解锁。"
-        case .activity: return "每一步判断和动作都留下可见记录，最近 100 条保留在本次运行中。"
+        case .activity: return "查看最近事件、持久日志和源码版本，遇到问题可导出诊断包。"
         case .appearance: return "状态灯的位置、颜色和信息密度，由你选择。"
         case .extras: return "启动、权限和播放行为，在这里统一管理。"
         case .tests: return "先看模拟预览，再按需测试真实系统效果。"
@@ -568,16 +616,27 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = app.lastActionError { Text(error).font(.callout).foregroundStyle(.red) }
             }
+            card("版本与诊断", icon: "doc.zipper") {
+                Text("应用：\(app.buildDescription)").font(.callout)
+                Text("源码：\(app.sourceRevision)").font(.caption).textSelection(.enabled)
+                Text(app.diagnosticStatus).font(.caption).foregroundStyle(.secondary)
+                Text("日志在本机滚动保留两份，每份约 1 MiB。退出后保留，不包含密码，也不会自动上传。")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("导出诊断包…") { app.exportDiagnostics() }
+                    Link("查看本版本源码", destination: URL(string: "https://github.com/JahanHe/MacAutolock/tree/\(app.sourceRevision.count == 40 ? app.sourceRevision : "master")")!)
+                }
+            }
             card("事件记录", icon: "list.bullet.rectangle") {
                 HStack {
-                    Text("最近 \(app.events.count) 条 · 退出后清空").font(.caption).foregroundStyle(.secondary)
+                    Text("最近 \(app.events.count) 条 · 本机持久保存").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("复制记录") {
                         let text = app.events.reversed().map { "\($0.date.formatted(date: .omitted, time: .standard))  \($0.message)" }.joined(separator: "\n")
                         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
                         app.feedback = "运行记录已复制，不包含密码。"; app.refreshStatus()
                     }
-                    Button("清空") { app.events.removeAll(); app.refreshStatus() }
+                    Button("清空本机记录") { app.clearDiagnosticLog() }
                 }
                 ForEach(app.events) { event in
                     VStack(alignment: .leading, spacing: 4) {

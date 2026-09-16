@@ -22,6 +22,8 @@ jobs:
           CODE_SIGNING_ALLOWED=NO ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO build
       - name: 检查打包结果
         run: python3 scripts/check_localization.py build/Build/Products/Release/BLEUnlock.app
+      - name: 记录可追溯源码版本
+        run: /usr/libexec/PlistBuddy -c "Add :MacAutolockSourceRevision string $GITHUB_SHA" build/Build/Products/Release/BLEUnlock.app/Contents/Info.plist
       - name: 为测试包添加本地签名
         run: |
           codesign --force --sign - build/Build/Products/Release/BLEUnlock.app/Contents/Library/LoginItems/Launcher.app

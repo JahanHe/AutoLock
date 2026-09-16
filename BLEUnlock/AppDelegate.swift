@@ -34,6 +34,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     var previewScenario = 0
     var testingUnlock = false
     var events: [RuntimeEvent] = []
+    var diagnosticStatus = "运行记录保存在本机，退出后保留。"
+    lazy var diagnosticLog = DiagnosticLog(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("jp.sone.BLEUnlock/诊断", isDirectory: true))
     var screenLocked = false
     var lockRequestAt: Date?
     var pendingLockReason: String?
@@ -87,6 +90,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     func recordEvent(_ message: String) {
         events.insert(RuntimeEvent(message: message), at: 0)
         if events.count > 100 { events.removeLast(events.count - 100) }
+        if !isPreview {
+            do { try diagnosticLog.append(events[0]) }
+            catch { diagnosticStatus = "日志写入失败：\(error.localizedDescription)。当前事件仍可在窗口复制或导出。" }
+        }
         objectWillChange.send()
     }
 
@@ -555,7 +562,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
             prefs.set(true, forKey: "returnPolicyV1")
         }
         constructMenu()
-        recordEvent(isPreview ? "已进入隔离演示模式，不执行真实系统操作。" : "应用已启动，正在初始化设备监测。")
+        if !isPreview {
+            do { events = try diagnosticLog.recentEvents() }
+            catch { diagnosticStatus = "历史日志读取失败：\(error.localizedDescription)" }
+        }
+        recordEvent(isPreview ? "已进入隔离演示模式，不执行真实系统操作。" : "应用已启动，版本 \(buildDescription)，源码 \(sourceRevision)；正在初始化设备监测。")
         ble.delegate = self
         ble.lockRSSI = prefs.integer(forKey: "lockRSSI")
         ble.unlockRSSI = prefs.integer(forKey: "unlockRSSI")
