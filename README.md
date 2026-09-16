@@ -1,232 +1,125 @@
-# BLEUnlock
+# MacAutolock · BLEUnlock 中文版
 
-## Please note that I don't distribute this app on the Mac App Store. You can find it here for free! 
+让随身的 iPhone、Apple Watch 或其他兼容蓝牙设备，帮助 Mac 在你离开时锁屏、回来时解锁。
 
-![CI](https://github.com/ts1/BLEUnlock/workflows/CI/badge.svg)
-![Github All Releases](https://img.shields.io/github/downloads/ts1/BLEUnlock/total.svg)
-[![Buy me a coffee](img/buymeacoffee.svg)](https://www.buymeacoffee.com/tsone)
+本项目是 [ts1/BLEUnlock](https://github.com/ts1/BLEUnlock) 的简体中文分支，基于上游 1.12.2。界面、通知、权限说明、运行日志、源码注释和使用文档以简体中文提供。应用名称暂时保留 BLEUnlock；原有设备选择、设置、钥匙串标识和脚本事件保持兼容。
 
-BLEUnlock is a small menu bar utility that locks and unlocks your Mac by proximity of your iPhone, Apple Watch, or any other Bluetooth Low Energy device.
+## 能做什么
 
-This document is also available in [Japanese (日本語版はこちら)](README.ja.md).
+- 设备靠近时自动解锁，设备远离或长时间没有信号时自动锁屏。
+- 分别调整锁定和解锁的信号强度，以及延迟锁定和无信号超时。
+- 靠近时点亮屏幕，也可以只唤醒、交给密码、Touch ID 或系统 Apple Watch 功能解锁。
+- 锁屏时暂停系统“播放中”控制的音乐或视频，解锁后恢复先前的播放。
+- 支持屏保锁定、锁定时关屏、登录时启动，以及锁定和解锁事件脚本。
+- iPhone 无需安装配套应用；用于自动解锁的 Mac 登录密码保存在系统钥匙串。
 
-## Features
+它通过蓝牙信号强度判断所选设备是否在附近，不是精确测距，也不验证设备持有人。如果手机留在电脑旁边，软件仍可能判断你在场。
 
-- No iPhone app is required
-- Works with any BLE devices that periodically transmits signal from [static MAC address](#notes-on-mac-address)
-- Unlocks your Mac for you when the BLE device is near your Mac, without entering password
-- Locks your Mac when the BLE device is away from your Mac
-- Optionally runs your own script upon lock/unlock
-- Optionally wakes from display sleep
-- Optionally pauses and unpauses music/video playback when you're away and back
-- Password is securely stored in Keychain
+## 安装与首次设置
 
-## Requirements
+这个分支的安装包以[本仓库发布页](https://github.com/JahanHe/MacAutolock/releases)为准。如果还没有正式发布，可以在[构建记录](https://github.com/JahanHe/MacAutolock/actions)中下载通过检查的中文预览包。预览包未经开发者签名和公证，系统可能阻止直接运行。
 
-- A Mac with Bluetooth Low Energy support
-- macOS 10.13 (High Sierra) or later
-- iPhone 5s or newer, Apple Watch (all), or another BLE device that has [static MAC address](#notes-on-mac-address) and transmits signal periodically
+`brew install bleunlock` 安装的是上游版本，不是本中文分支。
 
-## Installation
+1. 将应用放入“应用程序”文件夹，启动 BLEUnlock。
+2. 允许蓝牙访问；要自动输入密码解锁，还需要在系统设置中授予 BLEUnlock“辅助功能”权限。不同 macOS 版本的设置位置可能不同。
+3. 按提示输入当前 Mac 用户的登录密码。如果钥匙串询问是否允许访问，请选择“始终允许”，以便锁屏期间读取。
+4. 点击菜单栏图标，在“设备列表”中选择随身设备。
+5. 可选：允许通知，以查看“设备已远离”“设备信号已丢失”等锁屏原因。
 
-### Using Homebrew Cask
+“仅唤醒，不自动解锁”模式不需要 BLEUnlock 替你输入密码。系统权限弹窗中由 macOS 提供的按钮和说明遵循系统语言；本应用提供的用途说明为中文。
 
-```
-brew install bleunlock
-```
+## 菜单说明
 
-### Manual installation
+RSSI 表示接收信号强度，单位为 dBm。数值通常是负数，例如 -50 比 -80 强，通常也意味着更近；不能直接换算成固定距离。
 
-Download the zip file from [Releases](https://github.com/ts1/BLEUnlock/releases), unzip and move to the Applications folder.
+| 菜单 | 作用 |
+| --- | --- |
+| 设备列表 | 选择要监测的设备，一次监测一台。列表显示设备名称或标识及信号强度。 |
+| 立即锁定屏幕 | 立即锁定，随后要检测到设备离开再回来才恢复自动解锁；也可以手动解锁。 |
+| 解锁信号强度（RSSI） | 默认 -60 dBm。数值调大通常需要更近才解锁；可单独禁用。 |
+| 锁定信号强度（RSSI） | 默认 -80 dBm。数值调小通常需要更远才锁定；可单独禁用。 |
+| 延迟锁定 | 信号变弱达到锁定条件后再等待，期间恢复便取消。默认 5 秒；可选 2、5、15、30 秒或 1、2、5 分钟。 |
+| 无信号超时 | 从最后一次接收到信号起等待多久再锁定。默认 1 分钟；可选 30 秒或 1、2、5、10 分钟。 |
+| 靠近时唤醒屏幕 | 设备靠近时点亮已休眠的显示器，不代表能唤醒关机或整机睡眠中的 Mac。 |
+| 仅唤醒，不自动解锁 | 点亮屏幕后保持锁定，交给密码、Touch ID 或系统 Apple Watch 功能解锁。 |
+| 锁定时暂停音乐或视频 | 暂停系统“播放中”控制的媒体，解锁后恢复先前的播放；取决于播放器是否支持系统媒体控制。 |
+| 使用屏幕保护程序锁定 | 通过启动屏保触发锁定，必须在系统中设置进入屏保后立即要求密码。 |
+| 锁定时关闭屏幕 | 正常锁屏时立即熄灭显示器。启用屏保锁定时优先启动屏保，不执行此关屏动作。 |
+| 设置登录密码… | 保存或更新 Mac 登录密码。系统密码更改后，需要在这里同步更新。 |
+| 被动模式 | 通过接收广播监测设备，减少持续主动连接可能造成的蓝牙干扰。 |
+| 登录时启动 | 登录 macOS 后自动启动本应用。 |
+| 设置设备列表最低信号强度… | 默认 -70 dBm。只影响列表筛选，不改变锁定或解锁距离；调得更小可显示更多设备。 |
+| 关于 BLEUnlock | 查看版本、中文许可说明、项目主页和发布版本。 |
+| 退出 BLEUnlock | 退出应用，停止本应用的设备监测。 |
 
-## Setting up
+菜单顶部会显示当前信号强度，主动连接读取时标注“主动模式”，收不到信号时显示“未检测到设备信号”。
 
-On the first launch, it asks for the following permissions, which you must grant:
+### 怎么设置更合适
 
-Permission | Description
------------|---
-Bluetooth | Obviously, Bluetooth access is required. Choose *OK*.
-Accessibility | This is required to unlock the locked screen. Click *Open System Preferences*, click the lock icon on the bottom left to unlock, and turn on BLEUnlock.
-Keychain | (Not always asked) If asked, you have to choose **Always Allow** because it is required while the screen is locked.
-Notification | (Optional) BLEUnlock shows a message on the lock screen when it locks the screen. It is helpful to know if it's working properly. Additionally, to see the message on the lock screen, you need to set *Show previews* to *always* in the *Notification* preference pane. 
+先保留默认的 -60 / -80 dBm、5 秒延迟、1 分钟无信号超时。分别观察坐在电脑前和走开后的信号，再调整。手机放在口袋、身体遮挡或周围无线设备变化，都可能影响信号。
 
-> NOTE: The number of permissions required increases with each version of macOS, so if you are using an older OS, you may not be asked for one or more permissions.
+- **只要离开锁屏：** 将“解锁信号强度（RSSI）”设为“禁用”。这样也会停用本应用的靠近唤醒流程。
+- **想回来亮屏，由 Apple Watch 解锁：** 保留有效的解锁信号阈值，同时打开“靠近时唤醒屏幕”和“仅唤醒，不自动解锁”。
+- **蓝牙鼠标、键盘或热点不稳定：** 尝试“被动模式”。正常情况下上游建议使用默认的主动模式。
+- **坐着不动也因信号丢失而锁屏：** 适当延长“无信号超时”，或尝试被动模式。
 
-Then it asks your login password to unlock the lock screen.
-It will be stored safely in Keychain. 
+“延迟锁定”处理信号变弱，“无信号超时”处理完全没有信号；两者是不同的触发条件。
 
-Finally, from the menu bar icon, select *Device*.
-It starts scanning nearby BLE devices.
-Select your device, and you're done!
+## 设备与系统要求
 
-## Options
+上游声明的最低要求为支持低功耗蓝牙的 Mac、macOS 10.13 或以上、iPhone 5s 或更新机型、Apple Watch，或周期性广播且地址可稳定识别的其他 BLE 设备。最低要求不等于已经验证全部后续系统版本。
 
-Option | Description
--------|---
-Lock Screen Now | It locks the screen regardless of whether the BLE device is nearby or not; it will unlock once the BLE device moves away and then moves closer again. This is useful to ensure that the screen is locked before you leave your seat.
-Unlock RSSI | Bluetooth signal strength to unlock. Larger value indicates that the BLE device needs to be closer to the Mac to unlock. Choose *Disable* to disable unlocking.
-Lock RSSI | Bluetooth signal strength to lock. Smaller value indicates that the BLE device needs to be farther away from the Mac to lock. Choose *Disable* to disable locking.
-Delay to Lock | Duration of time before it locks the Mac when it detects that the BLE device is away. If the BLE device comes closer within that time, no lock will occur.
-No-Signal Timeout | Time between last signal reception and locking. If you experience frequent "Signal is lost" locking, increase this value.
-Wake on Proximity | Wakes up the display from sleep when the BLE device approaches while locking.
-Wake without Unlocking | BLEUnlock will not unlock the Mac when the display wakes up from sleep, whether automatically via "Wake on Proximity" or manually. This allows for compatibility with the macOS built-in unlock with Apple Watch feature (which can operate immediately after BLEUnlock wakes the screen), or if you just prefer the lock screen to appear more quickly but don't want it to auto-unlock.
-Pause "Now Playing" while Locked | On lock/unlock, BLEUnlock pauses/unpauses playback of music or video (including Apple Music, QuickTime Player and Spotify) that is controlled by *Now Playing* widget or the ⏯ key on the keyboard.
-Use Screensaver to Lock | If this option is set, BLEUnlock launches screensaver instead of locking. For this option to work properly, you need to set *Require password **immediately** after sleep or screen saver begins* option in *Security & Privacy* preference pane.
-Turn Off Screen on Lock | Turn off the display immediately when locking.
-Set Password... | If you changed your login password, use this.
-Passive Mode | By default it actively tries to connect to the BLE device and read the RSSI. Most of the time, the default is recommended and works stably. However, if you are using other Bluetooth things like keyboard, mouse, track pad or most notably Bluetooth Personal Hotspot, the default mode may interfere with each other. 2.4GHz WiFi may interfere as well. If you are experiencing instability of Bluetooth, turn on Passive Mode.
-Launch at Login | Launches BLEUnlock when you login.
-Set Minimum RSSI | Devices with RSSI below this value will not be displayed in the device scan list.
+苹果设备使用相同 Apple ID 有助于系统识别设备地址。持续更换随机蓝牙地址、且系统无法解析的其他设备，无法保证持续跟踪。
 
-## Troubleshooting
+## 常见问题
 
-### Can't find my device in the list
+**列表里找不到自己的设备：** 先将设备靠近电脑并确认蓝牙开启；适当降低“设备列表最低信号强度”。设备名称无法识别时可能显示一串标识，可以通过靠近、远离观察信号变化来识别。
 
-If your BLE device is not from Apple, BLEUnlock may not able to find the device name.
-If that is the case, your device is displayed as a UUID (long hexadecimal numbers and hyphens).
-To identify the device, try moving the device closer to or farther away from the Mac and see if the RSSI (dB value) changes accordingly.
+**能锁屏但不能解锁：** 检查辅助功能权限、保存的登录密码和钥匙串访问权限，并确认没有启用“仅唤醒，不自动解锁”或禁用解锁功能。
 
-If you don't see *any* device in the list, try resetting the Bluetooth module as described below.
+**手机还在旁边，点击“立即锁定屏幕”后不再自动解锁：** 这是该按钮的预期行为；设备需要先离开再回来，或直接手动解锁。
 
-### It fails to unlock
+**怎样检查更新：** 应用在启动和解锁等时机检查本仓库的最新正式发布，成功检查后至少间隔 24 小时再检查。发现版本变化会发出通知，点击后打开发布页，不会自动下载安装。仓库尚无正式发布时，不显示更新通知。
 
-Make sure BLEUnlock is turned on in *System Preferences* > *Security & Privacy* > *Privacy* > *Accessibility*.
-If it is already on, try turning it off and on again.
+## 锁定和解锁事件脚本
 
-If it asks for permission to access its own password in Keychain, you must choose *Always Allow*, because it is needed while the screen is locked.
+可在 `~/Library/Application Scripts/jp.sone.BLEUnlock/event` 放置可执行脚本。第一个参数说明事件类型；如果有信号记录，第二个参数为最近一次显示的 RSSI。
 
-### "Signal is lost" occurs frequently
+| 参数 | 含义 |
+| --- | --- |
+| `away` | 因设备远离而锁定 |
+| `lost` | 因没有信号而锁定 |
+| `unlocked` | BLEUnlock 执行了自动解锁操作 |
+| `intruded` | 检测到非 BLEUnlock 自动输入密码导致的解锁；不代表有人入侵 |
 
-Increase *No-Signal Timeout*.
-Or try *Passive Mode*.
+使用 `intruded` 时，上游要求设置睡眠后立即需要密码；禁用“解锁信号强度”时，该事件也不会执行。
 
-### My Bluetooth keyboard, mouse, Personal Hotspot, or whatever Bluetooth, went nuts!
+例如，可以自行编写脚本记录这些事件，或联动其他本地工具。通知、拍照等扩展需要另行编写和配置，并非应用开箱自带的功能。
 
-Firstly, Shift + Option + Click the Bluetooth icon in the menubar or Control Center, then click *Reset the Bluetooth module*.
+## 编译与检查
 
-In macOS 12 Monterey, this option is no longer available.
-Instead, type the command below in Terminal to reset the Bluetooth module:
-
-```
-sudo pkill bluetoothd
-```
-
-This command will ask your login password.
-
-If the problem persists, turn on *Passive Mode*.
-
-## Notes on MAC address
-
-Unlike classic Bluetooth, Bluetooth Low Energy devices can use *private* MAC address.
-That private address can be random, and can be changed from time to time.
-
-Recent smart devices, both iOS and Android, tend to use private addresses that change every 15 minutes or so. This is probably to prevent tracking.
-
-On the other hand, in order for BLEUnlock to track your device, its MAC address must be static.
-
-Fortunately, on Apple devices, if you are signed in with the same Apple ID as your Mac, the MAC address is resolved to the true (public) address.
-
-For other devices, including Android, the way to resolve the address is unknown.
-If your non-Apple device changes its MAC address over time, unfortunately BLEUnlock can't support it.
-
-To check if the MAC address is resolved correctly, compare the MAC address displayed in the *Device* scan list of BLEUnlock with the one that is displayed on your device.
-
-## Run script on lock/unlock
-
-On locking and unlocking, BLEUnlock runs a script located here:
-
-```
-~/Library/Application Scripts/jp.sone.BLEUnlock/event
-```
-
-An argument is passed depending on the type of event:
-
-|Event|Argument|
-|-----|--------|
-|Locked by BLEUnlock because of low RSSI|`away`|
-|Locked by BLEUnlock because of no signal|`lost`|
-|Unlocked by BLEUnlock|`unlocked`|
-|Unlocked manually|`intruded`|
-
-> NOTE: for `intruded` event works properly, you have to set *Require password **immediately** after sleep* in *Security & Privacy* preference pane.
-
-### Example
-
-Here is an example script which sends a LINE Notify message, with a photo of the person in front of the Mac when it is unlocked manually.
+需要完整 Xcode，只有 Command Line Tools 无法编译界面资源。
 
 ```sh
-#!/bin/bash
-
-set -eo pipefail
-
-LINE_TOKEN=xxxxx
-
-notify() {
-    local message=$1
-    local image=$2
-    if [ "$image" ]; then
-        img_arg="-F imageFile=@$image"
-    else
-        img_arg=""
-    fi
-    curl -X POST -H "Authorization: Bearer $LINE_TOKEN" -F "message=$message" \
-        $img_arg https://notify-api.line.me/api/notify
-}
-
-capture() {
-    open -Wa SnapshotUnlocker
-    ls -t /tmp/unlock-*.jpg | head -1
-}
-
-case $1 in
-    away)
-        notify "$(hostname -s) is locked by BLEUnlock because iPhone is away."
-        ;;
-    lost)
-        notify "$(hostname -s) is locked by BLEUnlock because signal is lost."
-        ;;
-    unlocked)
-        #notify "$(hostname -s) is unlocked by BLEUnlock."
-        ;;
-    intruded)
-        notify "$(hostname -s) is manually unlocked." $(capture)
-        ;;
-esac
+python3 scripts/check_localization.py
+xcodebuild -project BLEUnlock.xcodeproj -scheme BLEUnlock \
+  -configuration Debug -derivedDataPath build \
+  CODE_SIGNING_ALLOWED=NO build
 ```
 
-`SnapshotUnlocker` is an .app created with Script Editor with this script:
+编译结果在 `build/Build/Products/Debug/BLEUnlock.app`。运行 `python3 scripts/check_localization.py build/Build/Products/Debug/BLEUnlock.app` 检查打包资源。GitHub Actions 执行同样的检查并提供预览包。
 
-```
-do shell script "/usr/local/bin/ffmpeg -f avfoundation -r 30 -i 0 -frames:v 1 -y /tmp/unlock-$(date +%Y%m%d_%H%M%S).jpg"
-```
+源码约定（`ponytail:`）：本分支只打包 Base 和简体中文资源，通过系统原生语言回退提供中文界面；已移除停用的外语资源，旧版说明入口跳转到本文。如以后恢复多语言，应补齐翻译并重新加入工程资源。
 
-This app is required because BLEUnlock does not have Camera permission.
-Giving permission to this app resolves the problem.
+## 来源与许可
 
-## Funding
+原作者为 Takeshi Sone。感谢上游作者、中文翻译贡献者 peiit 及所有贡献者。完整上游贡献记录请见[原项目](https://github.com/ts1/BLEUnlock)。
 
-The annual Apple Developer Program fee is funded by donations.
+本项目采用 MIT 许可证，[许可说明](LICENSE)首先提供完整中文译文，并保留原始英文许可及图标来源声明，同时随应用打包。图标源自 materialdesignicons.com，由 Google LLC 设计，采用 Apache 2.0 许可证。“关于”窗口中的中文许可内容为参考译文。
 
-If you like this app, I'd appreciate it if you could make a donation via [Buy Me a Coffee](https://www.buymeacoffee.com/tsone) or [PayPal Me](https://www.paypal.com/paypalme/my/profile) so I can keep up.
+## 中文呈现约定
 
-## Credits
+面向使用者和维护者的自然语言内容统一使用简体中文，包括项目简介、说明文档、变更说明、界面文案、运行日志、脚本提示与解释性注释。
 
-- [peiit](https://github.com/peiit): Chinese translation
-- [wenmin-wu](https://github.com/wenmin-wu): Minimum RSSI and moving average
-- [stephengroat](https://github.com/stephengroat): CI
-- [joeyhoer](https://github.com/joeyhoer): Homebrew Cask
-- [Skyearn](https://github.com/Skyearn): Big Sur style icon
-- [cyberclaus](https://github.com/cyberclaus): German, Swedish, Norwegian (Bokmål) and Danish localizations
-- [alonewolfx2](https://github.com/alonewolfx2): Turkish localization
-- [wernjie](https://github.com/wernjie): Wake without Unlocking
-- [tokfrans03](https://github.com/tokfrans03): Language fixes
-
-
-Icons are based on SVGs downloaded from materialdesignicons.com.
-They are originally designed by Google LLC and licensed under Apache License version 2.0.
-
-## License
-
-MIT
-
-Copyright © 2019-2022 Takeshi Sone.
+程序标识符、系统接口、协议字段、配置键、路径、命令和品牌名称保留原样；设备自定义名称按设备实际名称显示。原始英文许可声明作为必须保留的来源材料附载，前面提供完整中文说明。系统自身生成的权限弹窗和外部命令输出由操作系统或对应工具决定。

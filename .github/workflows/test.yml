@@ -1,13 +1,28 @@
-name: CI
+name: 中文版构建检查
 
-on: [push]
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: read
 
 jobs:
   build:
-
-    runs-on: macOS-latest
-    
+    name: 编译与检查
+    runs-on: macos-latest
     steps:
-    - uses: actions/checkout@master
-    - name: Start xcodebuild test
-      run: xcodebuild clean build -project BLEUnlock.xcodeproj -scheme BLEUnlock
+      - uses: actions/checkout@v7
+      - name: 检查汉化资源
+        run: python3 scripts/check_localization.py
+      - name: 编译应用
+        run: >-
+          xcodebuild -project BLEUnlock.xcodeproj -scheme BLEUnlock
+          -configuration Debug -derivedDataPath build
+          CODE_SIGNING_ALLOWED=NO build
+      - name: 检查打包结果
+        run: python3 scripts/check_localization.py build/Build/Products/Debug/BLEUnlock.app
+      - name: 压缩中文预览版
+        run: ditto -c -k --keepParent build/Build/Products/Debug/BLEUnlock.app BLEUnlock-zh-Hans-preview.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: BLEUnlock-中文版预览
+          path: BLEUnlock-zh-Hans-preview.zip
