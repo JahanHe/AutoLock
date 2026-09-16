@@ -36,6 +36,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     var events: [RuntimeEvent] = []
     var screenLocked = false
     var lockRequestAt: Date?
+    var pendingLockReason: String?
+    var passwordAttemptedForLock = false
     var lastActionError: String?
     let mainMenu = NSMenu()
     var monitorMenuItem : NSMenuItem?
@@ -217,8 +219,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
             if !isScreenLocked() && ble.lockRSSI != ble.LOCK_DISABLED {
                 if lockOrSaveScreen() {
                     pauseNowPlaying()
-                    notifyUser(reason)
-                    runScript(reason)
+                    pendingLockReason = reason
                 }
             }
             if ble.lockRSSI == ble.LOCK_DISABLED { recordEvent("已判定远离或失联，但自动锁定开关关闭，未执行锁定。") }
@@ -267,6 +268,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         guard AXIsProcessTrusted() else { recordEvent("未允许辅助功能，跳过密码输入；离开锁定不受影响。"); return }
         guard status.healthy else { recordEvent("没有新的有效设备信号，跳过密码输入。"); return }
         guard !manualLock else { return }
+        guard !passwordAttemptedForLock else { recordEvent("本次锁定已尝试过密码输入，不重复输入；可手动解锁后检查设置。"); return }
         guard ble.presence else { return }
         guard ble.unlockRSSI != ble.UNLOCK_DISABLED else { return }
         guard !systemSleep else { return }
@@ -301,6 +303,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
             
             print("正在输入登录密码")
             self.recordEvent("条件满足，正在尝试密码解锁；等待系统解锁事件确认。")
+            self.passwordAttemptedForLock = true
             self.unlockedAt = Date().timeIntervalSince1970
             self.fakeKeyStrokes(password)
         })
@@ -347,8 +350,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         NSApp.setActivationPolicy(.regular)
     }
 
-    @objc func onUnlock() {
+    @objc func onLock() {
+        screenLocked = true
+        confirmLockRequest()
+        refreshStatus()
+    }
+
+    func confirmLockRequest() {
+        guard lockRequestAt != nil else { return }
+        recordEvent("系统已确认屏幕锁定。")
+        lastActionError = nil
         lockRequestAt = nil
+        if let reason = pendingLockReason {
+            pendingLockReason = nil
+            notifyUser(reason)
+            runScript(reason)
+        }
+    }
+
+    @objc func onUnlock() {
+        passwordAttemptedForLock = false
+        screenLocked = false
+        lockRequestAt = nil
+        pendingLockReason = nil
         recordEvent("系统已确认屏幕解锁。Apple Watch、Touch ID 或手动解锁的具体来源由系统决定。")
         lastActionError = nil
         Timer.scheduledTimer(withTimeInterval: 2, repeats: false, block: { _ in
@@ -425,6 +449,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
             return
         }
         hasPassword = true
+        passwordAttemptedForLock = false
         lastActionError = nil
         recordEvent("登录密码已保存到系统钥匙串；记录不包含密码内容。")
         refreshStatus()
@@ -579,6 +604,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         nc.addObserver(self, selector: #selector(onSystemWake), name: NSWorkspace.didWakeNotification, object: nil)
 
         let dnc = DistributedNotificationCenter.default
+        dnc.addObserver(self, selector: #selector(onLock), name: NSNotification.Name(rawValue: "com.apple.screenIsLocked"), object: nil)
         dnc.addObserver(self, selector: #selector(onUnlock), name: NSNotification.Name(rawValue: "com.apple.screenIsUnlocked"), object: nil)
         dnc.addObserver(self, selector: #selector(onScreensaverStart), name: NSNotification.Name(rawValue: "com.apple.screensaver.didstart"), object: nil)
         dnc.addObserver(self, selector: #selector(onScreensaverStop), name: NSNotification.Name(rawValue: "com.apple.screensaver.didstop"), object: nil)

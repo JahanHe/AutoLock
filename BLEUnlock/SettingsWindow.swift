@@ -194,13 +194,12 @@ extension AppDelegate {
         screenLocked = isScreenLocked()
         if let requested = lockRequestAt {
             if screenLocked {
-                recordEvent("系统已确认屏幕锁定。")
-                lastActionError = nil
-                lockRequestAt = nil
+                confirmLockRequest()
             } else if Date().timeIntervalSince(requested) > 3 {
                 lastActionError = "锁定请求发出后未观察到锁定状态；请使用立即锁定检查当前系统。"
                 recordEvent(lastActionError!)
                 lockRequestAt = nil
+                pendingLockReason = nil
             }
         }
         let value = loginService.status
@@ -509,6 +508,10 @@ struct SettingsView: View {
                 Text(runtimeSummary).font(.system(size: 13, weight: .medium))
                 Text("屏幕状态：\(app.isPreview ? "演示画面，不读取实际锁屏" : (app.screenLocked ? "已锁定" : "未锁定"))")
                     .font(.callout).foregroundStyle(.secondary)
+                if !app.isPreview {
+                    Text("显示器：\(app.displaySleep ? "已休眠" : "已唤醒")；手动锁定保护：\(app.manualLock ? "生效中" : "未启用")")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if let timer = app.ble.proximityTimer, timer.isValid {
                     Text("远离锁定倒计时：\(max(0, Int(ceil(timer.fireDate.timeIntervalSinceNow)))) 秒")
                         .font(.callout).monospacedDigit().foregroundStyle(.orange)
@@ -545,6 +548,7 @@ struct SettingsView: View {
         if app.lockRequestAt != nil { return "正在请求系统锁定，等待确认。" }
         if app.lastActionError != nil { return "最近操作存在异常，请查看下方原因。" }
         if app.systemSleep { return "系统休眠中，等待恢复扫描。" }
+        if app.screenLocked && app.manualLock { return "手动锁定保护中，设备离开再回来才执行返回动作。" }
         if app.screenLocked { return "屏幕已锁定，继续监测返回条件。" }
         if app.ble.proximityTimer?.isValid == true { return "信号持续偏弱，正在确认是否离开。" }
         if !app.status.healthy { return "监测信号异常，失联锁定计时仍有效。" }
