@@ -1,28 +1,53 @@
 import Cocoa
 import Quartz
 import ServiceManagement
+import CoreBluetooth
+import SwiftUI
+import Combine
+import LocalAuthentication
+import UserNotifications
 
 func t(_ key: String) -> String {
     return NSLocalizedString(key, comment: "")
 }
 
 @NSApplicationMain
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation, NSUserNotificationCenterDelegate, BLEDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDelegate, UNUserNotificationCenterDelegate, BLEDelegate {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    let ble = BLE()
+    let isPreview = ProcessInfo.processInfo.arguments.contains("--preview")
+    lazy var ble = BLE(enableBluetooth: !isPreview)
+    let objectWillChange = ObservableObjectPublisher()
+    var settingsWindow: NSWindow?
+    var settingsPage: SettingsPage = .overview
+    var statusTimer: Timer?
+    var scanTimer: Timer?
+    var unlockTimer: Timer?
+    var scanningForDevices = false
+    var bluetoothState: CBManagerState = .unknown
+    var lastSignalAt: Date?
+    var activeConnection = false
+    var feedback = "设置会立即生效，无需另外保存。"
+    var hasPassword = false
+    var accessibilityGranted = false
+    var loginEnabled = false
+    var loginNeedsApproval = false
+    var previewScenario = 0
+    var testingUnlock = false
+    var events: [RuntimeEvent] = []
+    var screenLocked = false
+    var lockRequestAt: Date?
+    var lastActionError: String?
     let mainMenu = NSMenu()
-    let deviceMenu = NSMenu()
-    let lockRSSIMenu = NSMenu()
-    let unlockRSSIMenu = NSMenu()
-    let timeoutMenu = NSMenu()
-    let lockDelayMenu = NSMenu()
-    var deviceDict: [UUID: NSMenuItem] = [:]
     var monitorMenuItem : NSMenuItem?
-    let prefs = UserDefaults.standard
+    let previewSuite = "local.macautolock.preview.\(UUID().uuidString)"
+    lazy var prefs: UserDefaults = {
+        // ponytail: 预览只使用独立临时设置，不读取或覆盖真实偏好与钥匙串。
+        if isPreview { return UserDefaults(suiteName: previewSuite)! }
+        return .standard
+    }()
     var displaySleep = false
     var systemSleep = false
     var connected = false
-    var userNotification: NSUserNotification?
     var nowPlayingWasPlaying = false
     var aboutBox: AboutBox? = nil
     var wakeTimer: Timer?
@@ -31,106 +56,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     var inScreensaver = false
     var lastRSSI: Int? = nil
 
-    func menuWillOpen(_ menu: NSMenu) {
-        if menu == deviceMenu {
-            ble.startScanning()
-        } else if menu == lockRSSIMenu {
-            for item in menu.items {
-                if item.tag == ble.lockRSSI {
-                    item.state = .on
-                } else {
-                    item.state = .off
-                }
-            }
-        } else if menu == unlockRSSIMenu {
-            for item in menu.items {
-                if item.tag == ble.unlockRSSI {
-                    item.state = .on
-                } else {
-                    item.state = .off
-                }
-            }
-        } else if menu == timeoutMenu {
-            for item in menu.items {
-                if item.tag == Int(ble.signalTimeout) {
-                    item.state = .on
-                } else {
-                    item.state = .off
-                }
-            }
-        } else if menu == lockDelayMenu {
-            for item in menu.items {
-                if item.tag == Int(ble.proximityTimeout) {
-                    item.state = .on
-                } else {
-                    item.state = .off
-                }
-            }
-        }
-    }
-
-    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.menu == lockRSSIMenu {
-            return menuItem.tag <= ble.unlockRSSI
-        } else if menuItem.menu == unlockRSSIMenu {
-            return menuItem.tag >= ble.lockRSSI
-        }
-        return true
-    }
-    
-    func menuDidClose(_ menu: NSMenu) {
-        if menu == deviceMenu {
-            ble.stopScanning()
-        }
-    }
-    
-    func menuItemTitle(device: Device) -> String {
-        var desc : String!
-        if let mac = device.macAddr {
-            let prettifiedMac = mac.replacingOccurrences(of: "-", with: ":").uppercased()
-            desc = String(format: "%@ (%@)", device.description, prettifiedMac)
-        } else {
-            desc = device.description
-        }
-        return String(format: "%@ (%ddBm)", desc, device.rssi)
-    }
-    
-    func newDevice(device: Device) {
-        let menuItem = deviceMenu.addItem(withTitle: menuItemTitle(device: device), action:#selector(selectDevice), keyEquivalent: "")
-        deviceDict[device.uuid] = menuItem
-        if (device.uuid == ble.monitoredUUID) {
-            menuItem.state = .on
-        }
-    }
-    
-    func updateDevice(device: Device) {
-        if let menu = deviceDict[device.uuid] {
-            menu.title = menuItemTitle(device: device)
-        }
-    }
-    
-    func removeDevice(device: Device) {
-        if let menuItem = deviceDict[device.uuid] {
-            menuItem.menu?.removeItem(menuItem)
-        }
-        deviceDict.removeValue(forKey: device.uuid)
-    }
+    func newDevice(device: Device) { objectWillChange.send() }
+    func updateDevice(device: Device) { objectWillChange.send() }
+    func removeDevice(device: Device) { objectWillChange.send() }
 
     func updateRSSI(rssi: Int?, active: Bool) {
-        if let r = rssi {
-            lastRSSI = r
-            monitorMenuItem?.title = String(format:"%ddBm", r) + (active ? "（" + t("active_mode") + "）" : "")
-            if (!connected) {
-                connected = true
-                statusItem.button?.image = NSImage(named: "StatusBarConnected")
-            }
-        } else {
-            monitorMenuItem?.title = t("not_detected")
-            if (connected) {
-                connected = false
-                statusItem.button?.image = NSImage(named: "StatusBarDisconnected")
-            }
+        lastRSSI = rssi
+        connected = rssi != nil
+        if rssi != nil { lastSignalAt = Date() }
+        activeConnection = active
+        refreshStatus()
+    }
+
+    func bluetoothStateChanged(_ state: CBManagerState) {
+        bluetoothState = state
+        recordEvent(state == .poweredOn ? "Mac 蓝牙已开启。" : "Mac 蓝牙不可用：\(status.title)。失联计时继续。")
+        if state != .poweredOn {
+            connected = false
+            activeConnection = false
+            lastRSSI = nil
+            unlockTimer?.invalidate()
         }
+        refreshStatus()
+    }
+
+    func monitorEvent(_ message: String) { recordEvent(message) }
+
+    func recordEvent(_ message: String) {
+        events.insert(RuntimeEvent(message: message), at: 0)
+        if events.count > 100 { events.removeLast(events.count - 100) }
+        objectWillChange.send()
     }
 
     func bluetoothPowerWarn() {
@@ -138,35 +93,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
 
     func notifyUser(_ reason: String) {
-        let un = NSUserNotification()
-        un.title = "BLEUnlock"
-        if reason == "lost" {
-            un.subtitle = t("notification_lost_signal")
-        } else if reason == "away" {
-            un.subtitle = t("notification_device_away")
-        }
-        un.informativeText = t("notification_locked")
-        un.deliveryDate = Date().addingTimeInterval(1)
-        NSUserNotificationCenter.default.scheduleNotification(un)
-        userNotification = un
+        guard !isPreview, prefs.bool(forKey: "lockNotifications") else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "MacAutolock"
+        content.subtitle = t(reason == "lost" ? "notification_lost_signal" : "notification_device_away")
+        content.body = t("notification_locked")
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "proximity-lock", content: content, trigger: nil))
     }
 
-    func userNotificationCenter(_ center: NSUserNotificationCenter,
-                                shouldPresent notification: NSUserNotification) -> Bool {
-        return true
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list])
     }
 
-    func userNotificationCenter(_ center: NSUserNotificationCenter,
-                                didActivate notification: NSUserNotification) {
-        if notification != userNotification {
-            NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/MacAutolock/releases")!)
-            NSUserNotificationCenter.default.removeDeliveredNotification(notification)
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        DispatchQueue.main.async {
+            if response.notification.request.identifier == "update" {
+                NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/MacAutolock/releases")!)
+            } else { self.showSettings() }
+            completionHandler()
         }
     }
 
     func runScript(_ arg: String) {
+        guard !isPreview else { return }
         guard let directory = try? FileManager.default.url(for: .applicationScriptsDirectory, in: .userDomainMask, appropriateFor: nil, create: true) else { return }
         let file = directory.appendingPathComponent("event")
+        guard FileManager.default.fileExists(atPath: file.path) else { return }
         let process = Process()
         process.executableURL = file
         if let r = lastRSSI {
@@ -174,10 +128,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         } else {
             process.arguments = [arg]
         }
-        try? process.run()
+        process.terminationHandler = { process in
+            DispatchQueue.main.async { self.recordEvent("事件脚本结束，退出代码：\(process.terminationStatus)。") }
+        }
+        do { try process.run(); recordEvent("已启动用户配置的事件脚本。") }
+        catch { recordEvent("事件脚本启动失败：\(error.localizedDescription)") }
     }
 
     func pauseNowPlaying() {
+        guard !isPreview else { return }
         guard prefs.bool(forKey: "pauseItunes") else { return }
         MRMediaRemoteGetNowPlayingApplicationIsPlaying(
             DispatchQueue.main,
@@ -185,6 +144,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
                 self.nowPlayingWasPlaying = playing
                 if self.nowPlayingWasPlaying {
                     print("暂停媒体播放")
+                    self.recordEvent("检测到媒体正在播放，已发送暂停请求。")
                     MRMediaRemoteSendCommand(MRCommandPause, nil)
                 }
             }
@@ -192,59 +152,83 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
     
     func playNowPlaying() {
+        guard !isPreview, prefs.bool(forKey: "resumeMedia") else { return }
         guard prefs.bool(forKey: "pauseItunes") else { return }
         if nowPlayingWasPlaying {
             print("恢复媒体播放")
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+                guard self.prefs.bool(forKey: "resumeMedia"), !self.isScreenLocked() else { return }
                 MRMediaRemoteSendCommand(MRCommandPlay, nil)
+                self.recordEvent("已请求恢复先前由本应用暂停的媒体。")
                 self.nowPlayingWasPlaying = false
             })
         }
     }
 
-    func lockOrSaveScreen() {
-        if prefs.bool(forKey: "screensaver") {
-            NSWorkspace.shared.launchApplication("ScreenSaverEngine")
-        } else {
-            if SACLockScreenImmediate() != 0 {
-                print("锁定屏幕失败")
-            }
-            if prefs.bool(forKey: "sleepDisplay") {
-                print("关闭显示器")
-                sleepDisplay()
-            }
+    @discardableResult func lockOrSaveScreen() -> Bool {
+        guard !isPreview else { return false }
+        guard SACLockScreenImmediate() == 0 else {
+            feedback = "系统未接受锁屏请求，请先用“立即锁定”检查兼容性。"
+            lastActionError = feedback
+            recordEvent(feedback)
+            print("锁定屏幕失败")
+            refreshStatus()
+            return false
         }
+        lockRequestAt = Date()
+        recordEvent("已向系统请求锁定，等待锁定状态确认。")
+        // 先锁屏，再处理显示效果；屏保不能替代锁定。
+        if prefs.bool(forKey: "sleepDisplay") { turnOffDisplay() }
+        else if prefs.bool(forKey: "screensaver") { startScreensaver() }
+        return true
     }
 
     func updatePresence(presence: Bool, reason: String) {
+        refreshStatus()
+        guard !isPreview else { return }
         if presence {
-            if ble.unlockRSSI != ble.UNLOCK_DISABLED {
-                if let un = userNotification {
-                    NSUserNotificationCenter.default.removeDeliveredNotification(un)
-                    userNotification = nil
-                }
-                if displaySleep && !systemSleep && prefs.bool(forKey: "wakeOnProximity") {
-                    print("正在唤醒显示器")
+            guard !manualLock, ble.unlockRSSI != ble.UNLOCK_DISABLED else {
+                recordEvent(manualLock ? "检测到靠近，但手动锁定保护中，暂不执行返回动作。" : "检测到靠近，但靠近动作已关闭。")
+                return
+            }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["proximity-lock"])
+            if returnPolicy.wake && !systemSleep {
+                recordEvent("检测到返回，已请求唤醒屏幕。")
+                wakeDisplay()
+                wakeTimer?.invalidate()
+                var attempts = 0
+                wakeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+                    guard let self = self, self.status.healthy, self.ble.presence,
+                          self.returnPolicy.wake, !self.manualLock, !self.systemSleep,
+                          self.displaySleep, attempts < 3 else { timer.invalidate(); return }
+                    attempts += 1
                     wakeDisplay()
-                    wakeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true, block: { _ in
-                        print("重新尝试唤醒显示器")
-                        wakeDisplay()
-                    })
                 }
-                tryUnlockScreen()
             }
+            if prefs.bool(forKey: "watchCompatible") {
+                recordEvent("Apple Watch 兼容模式：本应用不输入密码，解锁交给 macOS。")
+            } else if !returnPolicy.typePassword {
+                recordEvent("密码解锁开关已关闭，不输入密码。")
+            }
+            tryUnlockScreen()
         } else {
-            if (!isScreenLocked() && ble.lockRSSI != ble.LOCK_DISABLED) {
-                pauseNowPlaying()
-                lockOrSaveScreen()
-                notifyUser(reason)
-                runScript(reason)
+            unlockTimer?.invalidate()
+            wakeTimer?.invalidate()
+            if !isScreenLocked() && ble.lockRSSI != ble.LOCK_DISABLED {
+                if lockOrSaveScreen() {
+                    pauseNowPlaying()
+                    notifyUser(reason)
+                    runScript(reason)
+                }
             }
+            if ble.lockRSSI == ble.LOCK_DISABLED { recordEvent("已判定远离或失联，但自动锁定开关关闭，未执行锁定。") }
+            else if isScreenLocked() { recordEvent("屏幕已经锁定，保持锁定状态。") }
             manualLock = false
         }
     }
 
     func fakeKeyStrokes(_ string: String) {
+        guard !isPreview else { return }
         let src = CGEventSource(stateID: .hidSystemState)
         // 每次键盘事件最多发送 20 个字符，以适配系统限制。
         let PER = 20
@@ -260,12 +244,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             }
             pressEvent?.keyboardSetUnicodeString(stringLength: len, unicodeString: buffer)
             pressEvent?.post(tap: .cghidEventTap)
+            buffer.deallocate()
             CGEvent(keyboardEventSource: src, virtualKey: 49, keyDown: false)?.post(tap: .cghidEventTap)
         }
         
         // 发送回车键。
-        CGEvent(keyboardEventSource: src, virtualKey: 52, keyDown: true)?.post(tap: .cghidEventTap)
-        CGEvent(keyboardEventSource: src, virtualKey: 52, keyDown: false)?.post(tap: .cghidEventTap)
+        CGEvent(keyboardEventSource: src, virtualKey: 36, keyDown: true)?.post(tap: .cghidEventTap)
+        CGEvent(keyboardEventSource: src, virtualKey: 36, keyDown: false)?.post(tap: .cghidEventTap)
     }
 
     func isScreenLocked() -> Bool {
@@ -278,6 +263,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
     
     func tryUnlockScreen() {
+        guard !isPreview, returnPolicy.typePassword else { return }
+        guard AXIsProcessTrusted() else { recordEvent("未允许辅助功能，跳过密码输入；离开锁定不受影响。"); return }
+        guard status.healthy else { recordEvent("没有新的有效设备信号，跳过密码输入。"); return }
         guard !manualLock else { return }
         guard ble.presence else { return }
         guard ble.unlockRSSI != ble.UNLOCK_DISABLED else { return }
@@ -294,20 +282,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
 
         guard !self.prefs.bool(forKey: "wakeWithoutUnlocking") else { return }
 
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
-            guard self.isScreenLocked() else { return }
-            guard let password = self.fetchPassword(warn: true) else { return }
+        unlockTimer?.invalidate()
+        unlockTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
+            // 设置或设备状态可能在等待期间变化，输入密码前再次检查。
+            guard self.returnPolicy.typePassword, !self.manualLock, self.ble.presence, self.status.healthy,
+                  self.ble.unlockRSSI != self.ble.UNLOCK_DISABLED,
+                  !self.prefs.bool(forKey: "wakeWithoutUnlocking"),
+                  !self.systemSleep, !self.displaySleep, AXIsProcessTrusted(),
+                  self.isScreenLocked() else { return }
+            guard let password = self.fetchPassword() else {
+                self.lastActionError = "无法读取登录密码，未执行密码输入。请在设置中检查钥匙串或重新保存。"
+                self.recordEvent(self.lastActionError!)
+                self.refreshStatus()
+                return
+            }
+            guard self.isScreenLocked(), self.returnPolicy.typePassword,
+                  self.status.healthy, self.ble.presence, !self.manualLock else { return }
             
             print("正在输入登录密码")
+            self.recordEvent("条件满足，正在尝试密码解锁；等待系统解锁事件确认。")
             self.unlockedAt = Date().timeIntervalSince1970
             self.fakeKeyStrokes(password)
-            self.playNowPlaying()
-            self.runScript("unlocked")
         })
     }
 
     @objc func onDisplayWake() {
         print("显示器已唤醒")
+        recordEvent("系统确认显示器已唤醒。")
         displaySleep = false
         wakeTimer?.invalidate()
         wakeTimer = nil
@@ -316,28 +317,40 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
 
     @objc func onDisplaySleep() {
         print("显示器已休眠")
+        recordEvent("系统确认显示器已休眠。")
         displaySleep = true
     }
 
     @objc func onSystemWake() {
         print("系统已唤醒")
+        recordEvent("系统已从睡眠恢复，正在恢复设备扫描。")
         Timer.scheduledTimer(withTimeInterval: 1, repeats: false, block: { _ in
             print("执行系统唤醒后的延迟任务")
             NSApp.setActivationPolicy(.accessory) // 再次隐藏程序坞图标。
             self.systemSleep = false
+            self.ble.scanForPeripherals()
             self.tryUnlockScreen()
         })
     }
     
     @objc func onSystemSleep() {
         print("系统已休眠")
+        recordEvent("系统进入睡眠；深度睡眠期间无法保证蓝牙监测。")
         systemSleep = true
+        lastRSSI = nil
+        lastSignalAt = nil
+        ble.latestRSSIs.removeAll()
+        unlockTimer?.invalidate()
+        wakeTimer?.invalidate()
         // 临时设为常规应用，让蓝牙重新开启后 CBCentralManager 能继续扫描设备。
         // 这会显示程序坞图标，但此时屏幕已经关闭。
         NSApp.setActivationPolicy(.regular)
     }
 
     @objc func onUnlock() {
+        lockRequestAt = nil
+        recordEvent("系统已确认屏幕解锁。Apple Watch、Touch ID 或手动解锁的具体来源由系统决定。")
+        lastActionError = nil
         Timer.scheduledTimer(withTimeInterval: 2, repeats: false, block: { _ in
             print("收到屏幕解锁事件")
             if Date().timeIntervalSince1970 >= self.unlockedAt + 10 {
@@ -347,7 +360,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
                 self.playNowPlaying()
             }
         })
+        if Date().timeIntervalSince1970 < unlockedAt + 10 { runScript("unlocked") }
+        playNowPlaying()
+        if !ble.presence { ble.rearmAfterUnlock() }
         manualLock = false
+        testingUnlock = false
+        refreshStatus()
         Timer.scheduledTimer(withTimeInterval: 2, repeats: false, block: { _ in
             checkUpdate()
         })
@@ -363,23 +381,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         inScreensaver = false
     }
 
-    @objc func selectDevice(item: NSMenuItem) {
-        for (uuid, menuItem) in deviceDict {
-            if menuItem == item {
-                monitorDevice(uuid: uuid)
-                prefs.set(uuid.uuidString, forKey: "device")
-                menuItem.state = .on
-            } else {
-                menuItem.state = .off
-            }
-        }
-    }
-
-    func monitorDevice(uuid: UUID) {
+    func selectDevice(_ uuid: UUID) {
+        recordEvent("已选择随身设备：\(ble.devices[uuid]?.description ?? uuid.uuidString)。")
+        prefs.set(uuid.uuidString, forKey: "device")
+        prefs.set(ble.devices[uuid]?.description ?? "所选设备", forKey: "deviceName")
         connected = false
-        statusItem.button?.image = NSImage(named: "StatusBarDisconnected")
-        monitorMenuItem?.title = t("not_detected")
-        ble.startMonitor(uuid: uuid)
+        lastRSSI = nil
+        lastSignalAt = nil
+        if isPreview { ble.monitoredUUID = uuid }
+        else { ble.startMonitor(uuid: uuid) }
+        refreshStatus()
     }
 
     func errorModal(_ msg: String, info: String? = nil) {
@@ -393,6 +404,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
     
     func storePassword(_ password: String) {
+        guard !isPreview else { return }
         let pw = password.data(using: .utf8)!
         
         let query: [String: Any] = [
@@ -402,16 +414,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             String(kSecAttrLabel): "BLEUnlock",
             String(kSecValueData): pw,
         ]
-        SecItemDelete(query as CFDictionary)
-        let status = SecItemAdd(query as CFDictionary, nil)
+        // 先更新已有条目，避免保存失败时删掉原来的密码。
+        var lookup = query
+        lookup.removeValue(forKey: String(kSecValueData))
+        lookup.removeValue(forKey: String(kSecAttrLabel))
+        var status = SecItemUpdate(lookup as CFDictionary, [String(kSecValueData): pw] as CFDictionary)
+        if status == errSecItemNotFound { status = SecItemAdd(query as CFDictionary, nil) }
         guard status == errSecSuccess else {
             errorModal(t("password_store_failed"), info: String(format: t("keychain_error"), status))
             return
         }
+        hasPassword = true
+        lastActionError = nil
+        recordEvent("登录密码已保存到系统钥匙串；记录不包含密码内容。")
+        refreshStatus()
     }
 
     func fetchPassword(warn: Bool = false) -> String? {
+        guard !isPreview else { return nil }
+        let context = LAContext()
+        context.interactionNotAllowed = true
         let query: [String: Any] = [
+            String(kSecUseAuthenticationContext): context,
             String(kSecClass): kSecClassGenericPassword,
             String(kSecAttrAccount): NSUserName(),
             String(kSecAttrService): Bundle.main.bundleIdentifier ?? "BLEUnlock",
@@ -429,17 +453,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             return nil
         }
         guard status == errSecSuccess else {
-            errorModal(t("password_read_failed"), info: String(format: t("keychain_error"), status))
+            if warn { errorModal(t("password_read_failed"), info: String(format: t("keychain_error"), status)) }
             return nil
         }
         guard let data = item as? Data else {
-            errorModal(t("password_decode_failed"))
+            if warn { errorModal(t("password_decode_failed")) }
             return nil
         }
-        return String(data: data, encoding: .utf8)!
+        return String(data: data, encoding: .utf8)
     }
     
     @objc func askPassword() {
+        guard !isPreview else { feedback = "演示预览不会读取或保存真实密码。"; refreshStatus(); return }
         let msg = NSAlert()
         msg.addButton(withTitle: t("ok"))
         msg.addButton(withTitle: t("cancel"))
@@ -455,254 +480,97 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         
         if (response == .alertFirstButtonReturn) {
             let pw = txt.stringValue
+            guard !pw.isEmpty else { feedback = "密码不能为空。"; refreshStatus(); return }
             storePassword(pw)
         }
     }
     
-    @objc func setRSSIThreshold() {
-        let msg = NSAlert()
-        msg.addButton(withTitle: t("ok"))
-        msg.addButton(withTitle: t("cancel"))
-        msg.messageText = t("enter_rssi_threshold")
-        msg.informativeText = t("enter_rssi_threshold_info")
-        msg.window.title = "BLEUnlock"
-        
-        let txt = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 20))
-        txt.placeholderString = String(ble.thresholdRSSI)
-        msg.accessoryView = txt
-        txt.becomeFirstResponder()
-        NSApp.activate(ignoringOtherApps: true)
-        let response = msg.runModal()
-        
-        if (response == .alertFirstButtonReturn) {
-            let val = txt.intValue
-            ble.thresholdRSSI = Int(val)
-            prefs.set(val, forKey: "thresholdRSSI")
-        }
-    }
-
-    @objc func toggleWakeOnProximity(_ menuItem: NSMenuItem) {
-        let value = !prefs.bool(forKey: "wakeOnProximity")
-        menuItem.state = value ? .on : .off
-        prefs.set(value, forKey: "wakeOnProximity")
-    }
-
-    @objc func setLockRSSI(_ menuItem: NSMenuItem) {
-        let value = menuItem.tag
-        prefs.set(value, forKey: "lockRSSI")
-        ble.lockRSSI = value
-    }
-    
-    @objc func setUnlockRSSI(_ menuItem: NSMenuItem) {
-        let value = menuItem.tag
-        prefs.set(value, forKey: "unlockRSSI")
-        ble.unlockRSSI = value
-    }
-
-    @objc func setTimeout(_ menuItem: NSMenuItem) {
-        let value = menuItem.tag
-        prefs.set(value, forKey: "timeout")
-        ble.signalTimeout = Double(value)
-    }
-
-    @objc func setLockDelay(_ menuItem: NSMenuItem) {
-        let value = menuItem.tag
-        prefs.set(value, forKey: "lockDelay")
-        ble.proximityTimeout = Double(value)
-    }
-
-    @objc func toggleLaunchAtLogin(_ menuItem: NSMenuItem) {
-        let launchAtLogin = !prefs.bool(forKey: "launchAtLogin")
-        prefs.set(launchAtLogin, forKey: "launchAtLogin")
-        menuItem.state = launchAtLogin ? .on : .off
-        SMLoginItemSetEnabled(Bundle.main.bundleIdentifier! + ".Launcher" as CFString, launchAtLogin)
-    }
-
-    @objc func togglePauseNowPlaying(_ menuItem: NSMenuItem) {
-        let pauseNowPlaying = !prefs.bool(forKey: "pauseItunes")
-        prefs.set(pauseNowPlaying, forKey: "pauseItunes")
-        menuItem.state = pauseNowPlaying ? .on : .off
-    }
-    
-    @objc func toggleUseScreensaver(_ menuItem: NSMenuItem) {
-        let value = !prefs.bool(forKey: "screensaver")
-        prefs.set(value, forKey: "screensaver")
-        menuItem.state = value ? .on : .off
-    }
-
-    @objc func toggleSleepDisplay(_ menuItem: NSMenuItem) {
-        let value = !prefs.bool(forKey: "sleepDisplay")
-        prefs.set(value, forKey: "sleepDisplay")
-        menuItem.state = value ? .on : .off
-    }
-    
-    @objc func togglePassiveMode(_ menuItem: NSMenuItem) {
-        let passiveMode = !prefs.bool(forKey: "passiveMode")
-        prefs.set(passiveMode, forKey: "passiveMode")
-        menuItem.state = passiveMode ? .on : .off
-        ble.setPassiveMode(passiveMode)
-    }
-
-    @objc func toggleWakeWithoutUnlocking(_ menuItem: NSMenuItem) {
-        let wakeWithoutUnlocking = !prefs.bool(forKey: "wakeWithoutUnlocking")
-        prefs.set(wakeWithoutUnlocking, forKey: "wakeWithoutUnlocking")
-        menuItem.state = wakeWithoutUnlocking ? .on : .off
-    }
-
     @objc func lockNow() {
+        guard !isPreview else { previewScenario = 1; feedback = "演示：已预览锁屏，没有锁定你的 Mac。"; refreshStatus(); return }
         guard !isScreenLocked() else { return }
         manualLock = true
-        pauseNowPlaying()
-        lockOrSaveScreen()
-    }
-    
-    @objc func showAboutBox() {
-        AboutBox.showAboutBox()
+        recordEvent("用户点击立即锁定，设备未离开前抑制自动返回动作。")
+        unlockTimer?.invalidate()
+        if lockOrSaveScreen() { pauseNowPlaying() }
     }
 
-    func constructRSSIMenu(_ menu: NSMenu, _ action: Selector) {
-        menu.addItem(withTitle: t("closer"), action: nil, keyEquivalent: "")
-        for proximity in stride(from: -30, to: -100, by: -5) {
-            let item = menu.addItem(withTitle: String(format: "%ddBm", proximity), action: action, keyEquivalent: "")
-            item.tag = proximity
-        }
-        menu.addItem(withTitle: t("farther"), action: nil, keyEquivalent: "")
-        menu.delegate = self
-    }
-    
+    @objc func showAboutBox() { AboutBox.showAboutBox() }
+
     func constructMenu() {
-        monitorMenuItem = mainMenu.addItem(withTitle: t("device_not_set"), action: nil, keyEquivalent: "")
-        
-        var item: NSMenuItem
-
-        item = mainMenu.addItem(withTitle: t("lock_now"), action: #selector(lockNow), keyEquivalent: "")
+        mainMenu.removeAllItems()
+        monitorMenuItem = mainMenu.addItem(withTitle: "等待设备信号", action: nil, keyEquivalent: "")
         mainMenu.addItem(NSMenuItem.separator())
-
-        item = mainMenu.addItem(withTitle: t("device"), action: nil, keyEquivalent: "")
-        item.submenu = deviceMenu
-        deviceMenu.delegate = self
-        deviceMenu.addItem(withTitle: t("scanning"), action: nil, keyEquivalent: "")
-
-        let unlockRSSIItem = mainMenu.addItem(withTitle: t("unlock_rssi"), action: nil, keyEquivalent: "")
-        unlockRSSIItem.submenu = unlockRSSIMenu
-        item = unlockRSSIMenu.addItem(withTitle: t("disabled"), action: #selector(setUnlockRSSI), keyEquivalent: "")
-        item.tag = ble.UNLOCK_DISABLED
-        constructRSSIMenu(unlockRSSIMenu, #selector(setUnlockRSSI))
-
-        let lockRSSIItem = mainMenu.addItem(withTitle: t("lock_rssi"), action: nil, keyEquivalent: "")
-        lockRSSIItem.submenu = lockRSSIMenu
-        constructRSSIMenu(lockRSSIMenu, #selector(setLockRSSI))
-        item = lockRSSIMenu.addItem(withTitle: t("disabled"), action: #selector(setLockRSSI), keyEquivalent: "")
-        item.tag = ble.LOCK_DISABLED
-
-        let lockDelayItem = mainMenu.addItem(withTitle: t("lock_delay"), action: nil, keyEquivalent: "")
-        lockDelayItem.submenu = lockDelayMenu
-        lockDelayMenu.addItem(withTitle: "2 " + t("seconds"), action: #selector(setLockDelay), keyEquivalent: "").tag = 2
-        lockDelayMenu.addItem(withTitle: "5 " + t("seconds"), action: #selector(setLockDelay), keyEquivalent: "").tag = 5
-        lockDelayMenu.addItem(withTitle: "15 " + t("seconds"), action: #selector(setLockDelay), keyEquivalent: "").tag = 15
-        lockDelayMenu.addItem(withTitle: "30 " + t("seconds"), action: #selector(setLockDelay), keyEquivalent: "").tag = 30
-        lockDelayMenu.addItem(withTitle: "1 " + t("minute"), action: #selector(setLockDelay), keyEquivalent: "").tag = 60
-        lockDelayMenu.addItem(withTitle: "2 " + t("minutes"), action: #selector(setLockDelay), keyEquivalent: "").tag = 120
-        lockDelayMenu.addItem(withTitle: "5 " + t("minutes"), action: #selector(setLockDelay), keyEquivalent: "").tag = 300
-        lockDelayMenu.delegate = self
-
-        let timeoutItem = mainMenu.addItem(withTitle: t("timeout"), action: nil, keyEquivalent: "")
-        timeoutItem.submenu = timeoutMenu
-        timeoutMenu.addItem(withTitle: "30 " + t("seconds"), action: #selector(setTimeout), keyEquivalent: "").tag = 30
-        timeoutMenu.addItem(withTitle: "1 " + t("minute"), action: #selector(setTimeout), keyEquivalent: "").tag = 60
-        timeoutMenu.addItem(withTitle: "2 " + t("minutes"), action: #selector(setTimeout), keyEquivalent: "").tag = 120
-        timeoutMenu.addItem(withTitle: "5 " + t("minutes"), action: #selector(setTimeout), keyEquivalent: "").tag = 300
-        timeoutMenu.addItem(withTitle: "10 " + t("minutes"), action: #selector(setTimeout), keyEquivalent: "").tag = 600
-        timeoutMenu.delegate = self
-
-        item = mainMenu.addItem(withTitle: t("wake_on_proximity"), action: #selector(toggleWakeOnProximity), keyEquivalent: "")
-        if prefs.bool(forKey: "wakeOnProximity") {
-            item.state = .on
-        }
-
-        item = mainMenu.addItem(withTitle: t("wake_without_unlocking"), action: #selector(toggleWakeWithoutUnlocking), keyEquivalent: "")
-        if prefs.bool(forKey: "wakeWithoutUnlocking") {
-            item.state = .on
-        }
-
-        item = mainMenu.addItem(withTitle: t("pause_now_playing"), action: #selector(togglePauseNowPlaying), keyEquivalent: "")
-        if prefs.bool(forKey: "pauseItunes") {
-            item.state = .on
-        }
-
-        item = mainMenu.addItem(withTitle: t("use_screensaver_to_lock"), action: #selector(toggleUseScreensaver), keyEquivalent: "")
-        if prefs.bool(forKey: "screensaver") {
-            item.state = .on
-        }
-
-        item = mainMenu.addItem(withTitle: t("sleep_display"), action: #selector(toggleSleepDisplay), keyEquivalent: "")
-        if prefs.bool(forKey: "sleepDisplay") {
-            item.state = .on
-        }
-        
-        mainMenu.addItem(withTitle: t("set_password"), action: #selector(askPassword), keyEquivalent: "")
-
-        item = mainMenu.addItem(withTitle: t("passive_mode"), action: #selector(togglePassiveMode), keyEquivalent: "")
-        item.state = prefs.bool(forKey: "passiveMode") ? .on : .off
-        
-        item = mainMenu.addItem(withTitle: t("launch_at_login"), action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
-        item.state = prefs.bool(forKey: "launchAtLogin") ? .on : .off
-        
-        mainMenu.addItem(withTitle: t("set_rssi_threshold"), action: #selector(setRSSIThreshold),
-                         keyEquivalent: "")
-
+        mainMenu.addItem(withTitle: "打开设置与测试窗口…", action: #selector(showSettings), keyEquivalent: ",")
+        mainMenu.addItem(withTitle: t("lock_now"), action: #selector(lockNow), keyEquivalent: "")
         mainMenu.addItem(NSMenuItem.separator())
         mainMenu.addItem(withTitle: t("about"), action: #selector(showAboutBox), keyEquivalent: "")
-        mainMenu.addItem(NSMenuItem.separator())
-        mainMenu.addItem(withTitle: t("quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        mainMenu.addItem(withTitle: t("quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = mainMenu
     }
 
     func checkAccessibility() {
+        guard !isPreview else { return }
         let key = kAXTrustedCheckOptionPrompt.takeRetainedValue() as String
-        if (!AXIsProcessTrustedWithOptions([key: true] as CFDictionary)) {
-            // 上面的权限提示选项有时不生效，发送一次按键可触发系统授权弹窗。
-            let src = CGEventSource(stateID: .hidSystemState)
-            // 按下并松开 Fn 键。
-            CGEvent(keyboardEventSource: src, virtualKey: 63, keyDown: true)?.post(tap: .cghidEventTap)
-            CGEvent(keyboardEventSource: src, virtualKey: 63, keyDown: false)?.post(tap: .cghidEventTap)
-        }
+        _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+        openSystemSettings("Privacy_Accessibility")
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        if let button = statusItem.button {
-            button.image = NSImage(named: "StatusBarDisconnected")
-            constructMenu()
+        prefs.register(defaults: ["lockRSSI": -80, "unlockRSSI": -60, "timeout": 60,
+                                  "lockDelay": 5, "thresholdRSSI": -70, "showSettingsOnLaunch": true,
+                                  "wakeOnProximity": true, "sleepDisplay": true,
+                                  "wakeWithoutUnlocking": true, "watchCompatible": true,
+                                  "showStatusLight": true, "showStatusIcon": true, "showStatusRSSI": false,
+                                  "healthyColor": "green", "unhealthyColor": "red", "lightSize": 8, "lightGap": 3,
+                                  "resumeMedia": true, "lockNotifications": true, "checkUpdates": true])
+        if !prefs.bool(forKey: "returnPolicyV1") {
+            // 升级时默认交给系统解锁，用户可在新窗口中明确开启密码输入。
+            prefs.set(true, forKey: "wakeWithoutUnlocking")
+            prefs.set(true, forKey: "watchCompatible")
+            prefs.set(true, forKey: "returnPolicyV1")
         }
+        constructMenu()
+        recordEvent(isPreview ? "已进入隔离演示模式，不执行真实系统操作。" : "应用已启动，正在初始化设备监测。")
         ble.delegate = self
-        if let str = prefs.string(forKey: "device") {
-            if let uuid = UUID(uuidString: str) {
-                monitorDevice(uuid: uuid)
-            }
-        }
-        let lockRSSI = prefs.integer(forKey: "lockRSSI")
-        if lockRSSI != 0 {
-            ble.lockRSSI = lockRSSI
-        }
-        let unlockRSSI = prefs.integer(forKey: "unlockRSSI")
-        if unlockRSSI != 0 {
-            ble.unlockRSSI = unlockRSSI
-        }
-        let timeout = prefs.integer(forKey: "timeout")
-        if timeout != 0 {
-            ble.signalTimeout = Double(timeout)
+        ble.lockRSSI = prefs.integer(forKey: "lockRSSI")
+        ble.unlockRSSI = prefs.integer(forKey: "unlockRSSI")
+        ble.signalTimeout = Double(prefs.integer(forKey: "timeout"))
+        ble.proximityTimeout = Double(prefs.integer(forKey: "lockDelay"))
+        ble.thresholdRSSI = prefs.integer(forKey: "thresholdRSSI")
+        if isPreview {
+            let device = Device(uuid: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)
+            device.blName = "演示 iPhone"
+            device.macAddr = "00-00-00-00-00-01"
+            device.rssi = -52
+            ble.devices[device.uuid] = device
+            ble.monitoredUUID = device.uuid
+            prefs.set("演示 iPhone", forKey: "deviceName")
+            bluetoothState = .poweredOn
+            lastRSSI = -52
+            lastSignalAt = Date()
+            connected = true
+            ble.presence = true
+            hasPassword = true
+            feedback = "演示预览：不连接蓝牙、不访问密码、不执行真实系统操作。"
+            refreshStatus()
+            showSettings()
+            configurePreviewCapture()
+            return
         }
         ble.setPassiveMode(prefs.bool(forKey: "passiveMode"))
-        let thresholdRSSI = prefs.integer(forKey: "thresholdRSSI")
-        if thresholdRSSI != 0 {
-            ble.thresholdRSSI = thresholdRSSI
+        if let value = prefs.string(forKey: "device"), let uuid = UUID(uuidString: value) {
+            ble.startMonitor(uuid: uuid)
         }
-        let lockDelay = prefs.integer(forKey: "lockDelay")
-        if lockDelay != 0 {
-            ble.proximityTimeout = Double(lockDelay)
+        UNUserNotificationCenter.current().delegate = self
+        if prefs.bool(forKey: "lockNotifications") {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
-
-        NSUserNotificationCenter.default.delegate = self
+        refreshPermissions()
+        checkStoredPassword()
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.refreshPermissions()
+            self?.refreshStatus()
+        }
 
         let nc = NSWorkspace.shared.notificationCenter;
         nc.addObserver(self, selector: #selector(onDisplaySleep), name: NSWorkspace.screensDidSleepNotification, object: nil)
@@ -715,17 +583,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         dnc.addObserver(self, selector: #selector(onScreensaverStart), name: NSNotification.Name(rawValue: "com.apple.screensaver.didstart"), object: nil)
         dnc.addObserver(self, selector: #selector(onScreensaverStop), name: NSNotification.Name(rawValue: "com.apple.screensaver.didstop"), object: nil)
 
-        if ble.unlockRSSI != ble.UNLOCK_DISABLED && !prefs.bool(forKey: "wakeWithoutUnlocking") && fetchPassword() == nil {
-            askPassword()
-        }
-        checkAccessibility()
         checkUpdate()
+        refreshStatus()
+        if prefs.bool(forKey: "showSettingsOnLaunch") { showSettings() }
 
         // 启动后隐藏程序坞图标。
         // 不能直接在 Info.plist 中启用 LSUIElement，否则蓝牙设备扫描无法工作。
         NSApp.setActivationPolicy(.accessory)
     }
     
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showSettings()
+        return true
+    }
+
     func applicationWillTerminate(_ aNotification: Notification) {
+        statusTimer?.invalidate()
+        scanTimer?.invalidate()
+        unlockTimer?.invalidate()
+        wakeTimer?.invalidate()
+        if isPreview { prefs.removePersistentDomain(forName: previewSuite) }
     }
 }

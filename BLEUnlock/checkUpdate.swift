@@ -1,4 +1,5 @@
 import Cocoa
+import UserNotifications
 
 private let KEY = "lastUpdateCheck"
 private let INTERVAL = 24.0 * 60 * 60
@@ -6,7 +7,7 @@ private var notified = false
 private var lastCheckAt = UserDefaults.standard.double(forKey: KEY)
 
 func checkUpdate() {
-    guard !notified else { return }
+    guard UserDefaults.standard.bool(forKey: "checkUpdates"), !notified else { return }
     let now = NSDate().timeIntervalSince1970
     guard now - lastCheckAt >= INTERVAL else { return }
     doCheckUpdate()
@@ -33,7 +34,7 @@ private func doCheckUpdate() {
 
 private func compareVersionsAndNotify(_ latestVersion: String) {
     if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
-        if version != latestVersion {
+        if version.compare(latestVersion.trimmingCharacters(in: CharacterSet(charactersIn: "v")), options: .numeric) == .orderedAscending {
             notify()
             notified = true
         }
@@ -41,8 +42,8 @@ private func compareVersionsAndNotify(_ latestVersion: String) {
 }
 
 private func notify() {
-    let un = NSUserNotification()
-    un.title = "BLEUnlock"
-    un.subtitle = t("notification_update_available")
-    NSUserNotificationCenter.default.deliver(un)
+    let content = UNMutableNotificationContent()
+    content.title = "MacAutolock"
+    content.subtitle = t("notification_update_available")
+    UNUserNotificationCenter.current().add(.init(identifier: "update", content: content, trigger: nil))
 }

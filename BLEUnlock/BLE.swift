@@ -112,6 +112,8 @@ protocol BLEDelegate {
     func removeDevice(device: Device)
     func updateRSSI(rssi: Int?, active: Bool)
     func updatePresence(presence: Bool, reason: String)
+    func bluetoothStateChanged(_ state: CBManagerState)
+    func monitorEvent(_ message: String)
     func bluetoothPowerWarn()
 }
 
@@ -132,6 +134,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     var proximityTimeout = 5.0
     var signalTimeout = 60.0
     var lastReadAt = 0.0
+    var lastRawRSSI: Int?
     var powerWarn = true
     var passiveMode = false
     var thresholdRSSI = -70
@@ -141,7 +144,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     var connectionTimer : Timer? = nil
 
     func scanForPeripherals() {
-        guard !centralMgr.isScanning else { return }
+        guard let centralMgr = centralMgr, centralMgr.state == .poweredOn, !centralMgr.isScanning else { return }
         centralMgr.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
     }
 
@@ -153,12 +156,13 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func stopScanning() {
         scanMode = false
         if activeModeTimer != nil {
-            centralMgr.stopScan()
+            centralMgr?.stopScan()
         }
     }
 
     func setPassiveMode(_ mode: Bool) {
         passiveMode = mode
+        delegate?.monitorEvent(mode ? "已选择被动监听，只接收广播。" : "已选择主动优先模式，连接失败时会监听广播。")
         if passiveMode {
             activeModeTimer?.invalidate()
             activeModeTimer = nil
@@ -174,9 +178,15 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             centralMgr.cancelPeripheralConnection(p)
         }
         monitoredUUID = uuid
+        lastRawRSSI = nil
+        delegate?.monitorEvent("已开始监测设备，等待有效信号；失联锁定计时已启用。")
         proximityTimer?.invalidate()
         resetSignalTimer()
         presence = true
+        latestRSSIs.removeAll()
+        lastReadAt = 0
+        delegate?.updateRSSI(rssi: nil, active: false)
+        connectionTimer?.invalidate()
         monitoredPeripheral = nil
         activeModeTimer?.invalidate()
         activeModeTimer = nil
@@ -185,41 +195,56 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func resetSignalTimer() {
         signalTimer?.invalidate()
-        signalTimer = Timer.scheduledTimer(withTimeInterval: signalTimeout, repeats: false, block: { _ in
-            print("设备信号已丢失")
-            self.delegate?.updateRSSI(rssi: nil, active: false)
-            if self.presence {
-                self.presence = false
-                self.delegate?.updatePresence(presence: self.presence, reason: "lost")
-            }
-        })
-        if let timer = signalTimer {
-            RunLoop.main.add(timer, forMode: .common)
+        guard monitoredUUID != nil else { return }
+        signalTimer = Timer.scheduledTimer(withTimeInterval: signalTimeout, repeats: false) { [weak self] _ in
+            self?.signalLost()
         }
+        RunLoop.main.add(signalTimer!, forMode: .common)
+    }
+
+    func rearmAfterUnlock() {
+        guard monitoredUUID != nil else { return }
+        presence = true
+        latestRSSIs.removeAll()
+        proximityTimer?.invalidate()
+        proximityTimer = nil
+        resetSignalTimer()
+        delegate?.monitorEvent("屏幕重新解锁，重新确认设备距离并启动失联计时。")
+    }
+
+    func signalLost() {
+        print("设备信号已丢失")
+        lastRawRSSI = nil
+        delegate?.monitorEvent("连续 \(Int(signalTimeout)) 秒没有有效信号，已触发失联判断。")
+        proximityTimer?.invalidate()
+        proximityTimer = nil
+        latestRSSIs.removeAll()
+        delegate?.updateRSSI(rssi: nil, active: false)
+        presence = false
+        // 即使之前已经远离，重新解锁后的失联计时也必须能够再次锁定。
+        delegate?.updatePresence(presence: false, reason: "lost")
     }
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        switch central.state {
-        case .poweredOn:
+        handleBluetoothState(central.state)
+    }
+
+    func handleBluetoothState(_ state: CBManagerState) {
+        delegate?.bluetoothStateChanged(state)
+        if state == .poweredOn {
             print("蓝牙已开启")
-            if activeModeTimer == nil {
-                scanForPeripherals()
-            }
-            powerWarn = false
-        case .poweredOff:
-            print("蓝牙已关闭")
-            presence = false
-            signalTimer?.invalidate()
-            signalTimer = nil
-            if powerWarn {
-                powerWarn = false
-                delegate?.bluetoothPowerWarn()
-            }
-        default:
-            break
+            scanForPeripherals()
+        } else {
+            print("蓝牙暂不可用，继续等待失联锁定计时")
+            activeModeTimer?.invalidate()
+            activeModeTimer = nil
+            connectionTimer?.invalidate()
+            monitoredPeripheral = nil
+            // 不清除 presence、不取消失联计时，否则关蓝牙会绕过离开锁定。
+            if signalTimer == nil || signalTimer?.isValid == false { resetSignalTimer() }
         }
     }
-    
+
     func getEstimatedRSSI(rssi: Int) -> Int {
         if latestRSSIs.count >= latestN {
             latestRSSIs.removeFirst()
@@ -232,31 +257,37 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func updateMonitoredPeripheral(_ rssi: Int) {
-        if rssi >= (unlockRSSI == UNLOCK_DISABLED ? lockRSSI : unlockRSSI) && !presence {
-            print("设备已靠近")
-            presence = true
-            delegate?.updatePresence(presence: presence, reason: "close")
-            latestRSSIs.removeAll() // 清除旧样本，避免状态反复跳变。
-        }
-
+        guard monitoredUUID != nil, ConnectionStatus.validRSSI(rssi) else { return }
+        lastRawRSSI = rssi
+        let returnThreshold = unlockRSSI == UNLOCK_DISABLED ? -60 : unlockRSSI
+        let cameBack = rssi >= returnThreshold && !presence
+        if cameBack { latestRSSIs.removeAll() }
         let estimatedRSSI = getEstimatedRSSI(rssi: rssi)
+        // 先发布有效信号，再通知靠近，保证解锁门槛读取的是本次采样。
         delegate?.updateRSSI(rssi: estimatedRSSI, active: activeModeTimer != nil)
-
-        if estimatedRSSI >= (lockRSSI == LOCK_DISABLED ? unlockRSSI : lockRSSI) {
-            if let timer = proximityTimer {
-                timer.invalidate()
-                print("已取消延迟锁定计时")
-                proximityTimer = nil
-            }
+        if cameBack {
+            print("设备已靠近")
+            delegate?.monitorEvent("信号达到靠近门槛 \(returnThreshold) dBm，判定设备已返回。")
+            presence = true
+            delegate?.updatePresence(presence: true, reason: "close")
+        }
+        let departureThreshold = lockRSSI == LOCK_DISABLED ? -80 : lockRSSI
+        if estimatedRSSI >= departureThreshold {
+            if proximityTimer != nil { delegate?.monitorEvent("信号恢复到远离门槛以上，取消延迟锁定。") }
+            proximityTimer?.invalidate()
+            proximityTimer = nil
         } else if presence && proximityTimer == nil {
-            proximityTimer = Timer.scheduledTimer(withTimeInterval: proximityTimeout, repeats: false, block: { _ in
+            proximityTimer = Timer.scheduledTimer(withTimeInterval: proximityTimeout, repeats: false) { [weak self] _ in
+                guard let self = self else { return }
                 print("设备已远离")
+                self.delegate?.monitorEvent("信号持续低于远离门槛，远离确认计时已到。")
                 self.presence = false
-                self.delegate?.updatePresence(presence: self.presence, reason: "away")
                 self.proximityTimer = nil
-            })
+                self.delegate?.updatePresence(presence: false, reason: "away")
+            }
             RunLoop.main.add(proximityTimer!, forMode: .common)
             print("已开始延迟锁定计时")
+            delegate?.monitorEvent("平均信号 \(estimatedRSSI) dBm 低于 \(departureThreshold) dBm，开始 \(Int(proximityTimeout)) 秒远离确认。")
         }
         resetSignalTimer()
     }
@@ -302,7 +333,8 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                         advertisementData: [String : Any],
                         rssi RSSI: NSNumber)
     {
-        let rssi = RSSI.intValue > 0 ? 0 : RSSI.intValue
+        let rssi = RSSI.intValue
+        guard ConnectionStatus.validRSSI(rssi) else { return }
         if let uuid = monitoredUUID {
             if peripheral.identifier.description == uuid.description {
                 if monitoredPeripheral == nil {
@@ -334,7 +366,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                     device.rssi = rssi
                     device.advData = advertisementData["kCBAdvDataManufacturerData"] as? Data
                     devices[peripheral.identifier] = device
-                    central.connect(peripheral, options: nil)
+                    if !passiveMode { central.connect(peripheral, options: nil) }
                     delegate?.newDevice(device: device)
                 }
             } else {
@@ -355,6 +387,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         }
         if peripheral == monitoredPeripheral && !passiveMode {
             print("设备已连接")
+            delegate?.monitorEvent("主动蓝牙连接已建立，正在读取设备信号。")
             connectionTimer?.invalidate()
             connectionTimer = nil
             peripheral.readRSSI()
@@ -362,22 +395,37 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        guard peripheral.identifier == monitoredUUID else { return }
+        delegate?.monitorEvent("主动连接失败，继续监听广播：\(error?.localizedDescription ?? "设备没有响应")")
+        scanForPeripherals()
+    }
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        guard peripheral.identifier == monitoredUUID else { return }
+        delegate?.monitorEvent("主动连接已断开，将重试连接或监听广播。失联锁定计时继续。")
+        scanForPeripherals()
+    }
+
     // MARK: - 蓝牙外设回调
 
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
-        guard peripheral == monitoredPeripheral else { return }
-        let rssi = RSSI.intValue > 0 ? 0 : RSSI.intValue
+        guard error == nil, peripheral == monitoredPeripheral else { return }
+        let rssi = RSSI.intValue
+        guard ConnectionStatus.validRSSI(rssi) else { return }
         updateMonitoredPeripheral(rssi)
         lastReadAt = Date().timeIntervalSince1970
 
         if activeModeTimer == nil && !passiveMode {
             print("已进入主动模式")
+            delegate?.monitorEvent("正在主动读取信号，每 2 秒采样一次。")
             if !scanMode {
-                centralMgr.stopScan()
+                centralMgr?.stopScan()
             }
             activeModeTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true, block: { _ in
                 if Date().timeIntervalSince1970 > self.lastReadAt + 10 {
                     print("已回退到被动模式")
+                    self.delegate?.monitorEvent("主动读取连续 10 秒无响应，已回退到广播监听。")
                     self.centralMgr.cancelPeripheralConnection(peripheral)
                     self.activeModeTimer?.invalidate()
                     self.activeModeTimer = nil
@@ -432,7 +480,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                         device.model = s
                         delegate?.updateDevice(device: device)
                     }
-                    if device.model != nil && device.model != nil && device.peripheral != monitoredPeripheral {
+                    if device.model != nil && device.manufacture != nil && device.peripheral != monitoredPeripheral {
                         centralMgr.cancelPeripheralConnection(peripheral)
                     }
                 }
@@ -446,8 +494,8 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         peripheral.discoverServices([DeviceInformation])
     }
 
-    override init() {
+    init(enableBluetooth: Bool = true) {
         super.init()
-        centralMgr = CBCentralManager(delegate: self, queue: nil)
+        if enableBluetooth { centralMgr = CBCentralManager(delegate: self, queue: nil) }
     }
 }

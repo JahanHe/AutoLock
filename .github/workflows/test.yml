@@ -1,4 +1,4 @@
-name: 中文版构建检查
+name: 中文测试版构建检查
 
 on: [push, workflow_dispatch]
 
@@ -13,16 +13,23 @@ jobs:
       - uses: actions/checkout@v7
       - name: 检查汉化资源
         run: python3 scripts/check_localization.py
+      - name: 检查锁定与手表兼容行为
+        run: scripts/check_behavior.sh
       - name: 编译应用
         run: >-
           xcodebuild -project BLEUnlock.xcodeproj -scheme BLEUnlock
-          -configuration Debug -derivedDataPath build
-          CODE_SIGNING_ALLOWED=NO build
+          -configuration Release -derivedDataPath build
+          CODE_SIGNING_ALLOWED=NO ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO build
       - name: 检查打包结果
-        run: python3 scripts/check_localization.py build/Build/Products/Debug/BLEUnlock.app
-      - name: 压缩中文预览版
-        run: ditto -c -k --keepParent build/Build/Products/Debug/BLEUnlock.app BLEUnlock-zh-Hans-preview.zip
+        run: python3 scripts/check_localization.py build/Build/Products/Release/BLEUnlock.app
+      - name: 为测试包添加本地签名
+        run: |
+          codesign --force --sign - build/Build/Products/Release/BLEUnlock.app/Contents/Library/LoginItems/Launcher.app
+          codesign --force --sign - build/Build/Products/Release/BLEUnlock.app
+          codesign --verify --deep --strict build/Build/Products/Release/BLEUnlock.app
+      - name: 压缩中文测试版
+        run: ditto -c -k --keepParent build/Build/Products/Release/BLEUnlock.app MacAutolock-1.13.0.zip
       - uses: actions/upload-artifact@v7
         with:
-          name: BLEUnlock-中文版预览
-          path: BLEUnlock-zh-Hans-preview.zip
+          name: MacAutolock-1.13.0-中文测试版
+          path: MacAutolock-1.13.0.zip

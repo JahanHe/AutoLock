@@ -7,6 +7,8 @@
 	objects = {
 
 /* PBXBuildFile 配置开始 */
+		CA1000000000000000000012 /* SettingsWindow.swift（源码） */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000011; };
+		CA1000000000000000000002 /* ConnectionStatus.swift（源码） */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000001; };
 		CA0000000000000000000001 /* LICENSE（资源） */ = {isa = PBXBuildFile; fileRef = CA0000000000000000000002 /* LICENSE */; };
 		3D2CF85B255102B300157996 /* MediaRemote.framework（框架） */ = {isa = PBXBuildFile; fileRef = 3D2CF85A255102B300157996 /* MediaRemote.framework */; };
 		3D2FCF08226C99CB007A06E7 /* Images.xcassets（资源） */ = {isa = PBXBuildFile; fileRef = 3D2FCF07226C99CB007A06E7 /* Images.xcassets */; };
@@ -41,6 +43,8 @@
 /* PBXCopyFilesBuildPhase 配置结束 */
 
 /* PBXFileReference 配置开始 */
+		CA1000000000000000000011 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
+		CA1000000000000000000001 /* ConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatus.swift; sourceTree = "<group>"; };
 		CA0000000000000000000002 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		3D2CF85A255102B300157996 /* MediaRemote.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaRemote.framework; path = ../../../../System/Library/PrivateFrameworks/MediaRemote.framework; sourceTree = "<group>"; };
 		3D2FCF07226C99CB007A06E7 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
@@ -133,6 +137,8 @@
 				3D600A35226CC1A40068FB7B /* Localizable.strings */,
 				3DD4B665226C1DF200451B7B /* BLE.swift */,
 				3D6070E126DBC68E00EE4E48 /* LEDeviceInfo.swift */,
+				CA1000000000000000000001 /* ConnectionStatus.swift */,
+				CA1000000000000000000011 /* SettingsWindow.swift */,
 				3DD4B653226C1C3200451B7B /* AppDelegate.swift */,
 				3DC0BC6922728FF1001145EC /* Info.plist */,
 				3DCAAA7C22ADE9830011A2DA /* checkUpdate.swift */,
@@ -184,7 +190,6 @@
 				3DD4B64D226C1C3200451B7B /* Frameworks */,
 				3DD4B64E226C1C3200451B7B /* Resources */,
 				3D600A5922701E5D0068FB7B /* 复制文件 */,
-				3D7C0F8022769F1F005A4C43 /* 构建脚本 */,
 			);
 			buildRules = (
 			);
@@ -276,25 +281,7 @@
 		};
 /* PBXResourcesBuildPhase 配置结束 */
 
-/* PBXShellScriptBuildPhase 配置开始 */
-		3D7C0F8022769F1F005A4C43 /* 构建脚本 */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "buildNumber=$(/usr/libexec/PlistBuddy -c \"Print CFBundleVersion\" \"${PROJECT_DIR}/${INFOPLIST_FILE}\")\nbuildNumber=$(($buildNumber + 1))\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $buildNumber\" \"${PROJECT_DIR}/${INFOPLIST_FILE}\"\n";
-		};
-/* PBXShellScriptBuildPhase 配置结束 */
+
 
 /* PBXSourcesBuildPhase 配置开始 */
 		3D600A3C22701A5A0068FB7B /* Sources */ = {
@@ -310,6 +297,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CA1000000000000000000002 /* ConnectionStatus.swift（源码） */,
+				CA1000000000000000000012 /* SettingsWindow.swift（源码） */,
 				3DD4B654226C1C3200451B7B /* AppDelegate.swift（源码） */,
 				3DD4B666226C1DF200451B7B /* BLE.swift（源码） */,
 				3DD4B664226C1CF000451B7B /* lowlevel.c（源码） */,
@@ -451,7 +440,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -508,7 +497,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
