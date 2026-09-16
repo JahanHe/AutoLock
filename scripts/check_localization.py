@@ -55,6 +55,19 @@ assert 'Google LLC' in (ROOT / 'LICENSE').read_text()
 info = plist(ROOT / 'BLEUnlock/Info.plist')
 assert has_chinese(info['NSBluetoothAlwaysUsageDescription'])
 
+# 检查自然语言入口，避免界面已汉化而文档、日志仍退回外语。
+for document in ROOT.glob('*.md'):
+    body = re.sub(r'```.*?```', '', document.read_text(), flags=re.S)
+    for heading in re.findall(r'^#+ (.+)$', body, flags=re.M):
+        assert has_chinese(heading), f'文档标题未汉化：{document.name}：{heading}'
+for source in (ROOT / 'BLEUnlock').glob('*.swift'):
+    for message in re.findall(r'\bprint\("([^"\n]*)"\)', source.read_text()):
+        assert has_chinese(message), f'运行日志未汉化：{source.name}：{message}'
+assert set(p.name for p in (ROOT / 'BLEUnlock').glob('*.lproj')) == {'Base.lproj', 'zh-Hans.lproj'}
+assert (ROOT / 'LICENSE').read_text().startswith('MIT 许可证（中文参考译文）')
+models = (ROOT / 'BLEUnlock/appleDeviceNames.swift').read_text()
+assert not re.search(r'generation|inch|Cellular|Rev A|\d+mm', models), '设备规格说明未汉化'
+
 if len(sys.argv) > 1:
     app = Path(sys.argv[1])
     resources = app / 'Contents/Resources'

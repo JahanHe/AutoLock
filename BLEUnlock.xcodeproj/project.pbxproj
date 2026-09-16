@@ -6,41 +6,41 @@
 	objectVersion = 50;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		CA0000000000000000000001 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = CA0000000000000000000002 /* LICENSE */; };
-		3D2CF85B255102B300157996 /* MediaRemote.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D2CF85A255102B300157996 /* MediaRemote.framework */; };
-		3D2FCF08226C99CB007A06E7 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3D2FCF07226C99CB007A06E7 /* Images.xcassets */; };
-		3D4EE4112279E55A00AF9E93 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D4EE4102279E55A00AF9E93 /* AppDelegate.m */; };
-		3D4EE4132279E56900AF9E93 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D4EE4122279E56900AF9E93 /* main.m */; };
-		3D4EE4152279E94B00AF9E93 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 3D4EE4142279E94B00AF9E93 /* MainMenu.xib */; };
-		3D600A37226CC1A40068FB7B /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 3D600A35226CC1A40068FB7B /* Localizable.strings */; };
-		3D600A5A22701E740068FB7B /* Launcher.app in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3D600A4022701A5A0068FB7B /* Launcher.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		3D6070E226DBC68E00EE4E48 /* LEDeviceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6070E126DBC68E00EE4E48 /* LEDeviceInfo.swift */; };
-		3D79FD7D226C335100A373C0 /* appleDeviceNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D79FD7C226C335100A373C0 /* appleDeviceNames.swift */; };
-		3D95379522784D550017D8B9 /* AboutBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D95379322784D550017D8B9 /* AboutBox.swift */; };
-		3D953797227853E20017D8B9 /* AboutBox.xib in Resources */ = {isa = PBXBuildFile; fileRef = 3D953799227853E20017D8B9 /* AboutBox.xib */; };
-		3DCAAA7D22ADE9830011A2DA /* checkUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCAAA7C22ADE9830011A2DA /* checkUpdate.swift */; };
-		3DD4B654226C1C3200451B7B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD4B653226C1C3200451B7B /* AppDelegate.swift */; };
-		3DD4B659226C1C3400451B7B /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 3DD4B657226C1C3400451B7B /* MainMenu.xib */; };
-		3DD4B664226C1CF000451B7B /* lowlevel.c in Sources */ = {isa = PBXBuildFile; fileRef = 3DD4B663226C1CF000451B7B /* lowlevel.c */; };
-		3DD4B666226C1DF200451B7B /* BLE.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD4B665226C1DF200451B7B /* BLE.swift */; };
-		3DD4B669226C1E3700451B7B /* login.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DD4B668226C1E3700451B7B /* login.framework */; };
-/* End PBXBuildFile section */
+/* PBXBuildFile 配置开始 */
+		CA0000000000000000000001 /* LICENSE（资源） */ = {isa = PBXBuildFile; fileRef = CA0000000000000000000002 /* LICENSE */; };
+		3D2CF85B255102B300157996 /* MediaRemote.framework（框架） */ = {isa = PBXBuildFile; fileRef = 3D2CF85A255102B300157996 /* MediaRemote.framework */; };
+		3D2FCF08226C99CB007A06E7 /* Images.xcassets（资源） */ = {isa = PBXBuildFile; fileRef = 3D2FCF07226C99CB007A06E7 /* Images.xcassets */; };
+		3D4EE4112279E55A00AF9E93 /* AppDelegate.m（源码） */ = {isa = PBXBuildFile; fileRef = 3D4EE4102279E55A00AF9E93 /* AppDelegate.m */; };
+		3D4EE4132279E56900AF9E93 /* main.m（源码） */ = {isa = PBXBuildFile; fileRef = 3D4EE4122279E56900AF9E93 /* main.m */; };
+		3D4EE4152279E94B00AF9E93 /* MainMenu.xib（资源） */ = {isa = PBXBuildFile; fileRef = 3D4EE4142279E94B00AF9E93 /* MainMenu.xib */; };
+		3D600A37226CC1A40068FB7B /* Localizable.strings（资源） */ = {isa = PBXBuildFile; fileRef = 3D600A35226CC1A40068FB7B /* Localizable.strings */; };
+		3D600A5A22701E740068FB7B /* Launcher.app（复制文件） */ = {isa = PBXBuildFile; fileRef = 3D600A4022701A5A0068FB7B /* Launcher.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3D6070E226DBC68E00EE4E48 /* LEDeviceInfo.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3D6070E126DBC68E00EE4E48 /* LEDeviceInfo.swift */; };
+		3D79FD7D226C335100A373C0 /* appleDeviceNames.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3D79FD7C226C335100A373C0 /* appleDeviceNames.swift */; };
+		3D95379522784D550017D8B9 /* AboutBox.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3D95379322784D550017D8B9 /* AboutBox.swift */; };
+		3D953797227853E20017D8B9 /* AboutBox.xib（资源） */ = {isa = PBXBuildFile; fileRef = 3D953799227853E20017D8B9 /* AboutBox.xib */; };
+		3DCAAA7D22ADE9830011A2DA /* checkUpdate.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3DCAAA7C22ADE9830011A2DA /* checkUpdate.swift */; };
+		3DD4B654226C1C3200451B7B /* AppDelegate.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3DD4B653226C1C3200451B7B /* AppDelegate.swift */; };
+		3DD4B659226C1C3400451B7B /* MainMenu.xib（资源） */ = {isa = PBXBuildFile; fileRef = 3DD4B657226C1C3400451B7B /* MainMenu.xib */; };
+		3DD4B664226C1CF000451B7B /* lowlevel.c（源码） */ = {isa = PBXBuildFile; fileRef = 3DD4B663226C1CF000451B7B /* lowlevel.c */; };
+		3DD4B666226C1DF200451B7B /* BLE.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3DD4B665226C1DF200451B7B /* BLE.swift */; };
+		3DD4B669226C1E3700451B7B /* login.framework（框架） */ = {isa = PBXBuildFile; fileRef = 3DD4B668226C1E3700451B7B /* login.framework */; };
+/* PBXBuildFile 配置结束 */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		3D600A5922701E5D0068FB7B /* CopyFiles */ = {
+/* PBXCopyFilesBuildPhase 配置开始 */
+		3D600A5922701E5D0068FB7B /* 复制文件 */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = Contents/Library/LoginItems;
 			dstSubfolderSpec = 1;
 			files = (
-				3D600A5A22701E740068FB7B /* Launcher.app in CopyFiles */,
+				3D600A5A22701E740068FB7B /* Launcher.app（复制文件） */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXCopyFilesBuildPhase section */
+/* PBXCopyFilesBuildPhase 配置结束 */
 
-/* Begin PBXFileReference section */
+/* PBXFileReference 配置开始 */
 		CA0000000000000000000002 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		3D2CF85A255102B300157996 /* MediaRemote.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaRemote.framework; path = ../../../../System/Library/PrivateFrameworks/MediaRemote.framework; sourceTree = "<group>"; };
 		3D2FCF07226C99CB007A06E7 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
@@ -69,9 +69,9 @@
 		3DD4B668226C1E3700451B7B /* login.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = login.framework; path = ../../../../System/Library/PrivateFrameworks/login.framework; sourceTree = "<group>"; };
 		B1EFF91422E010F50010DB0A /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/AboutBox.strings"; sourceTree = "<group>"; };
 		B1EFF91622E010F50010DB0A /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+/* PBXFileReference 配置结束 */
 
-/* Begin PBXFrameworksBuildPhase section */
+/* PBXFrameworksBuildPhase 配置开始 */
 		3D600A3D22701A5A0068FB7B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -83,14 +83,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3D2CF85B255102B300157996 /* MediaRemote.framework in Frameworks */,
-				3DD4B669226C1E3700451B7B /* login.framework in Frameworks */,
+				3D2CF85B255102B300157996 /* MediaRemote.framework（框架） */,
+				3DD4B669226C1E3700451B7B /* login.framework（框架） */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXFrameworksBuildPhase section */
+/* PBXFrameworksBuildPhase 配置结束 */
 
-/* Begin PBXGroup section */
+/* PBXGroup 配置开始 */
 		3D600A4122701A5B0068FB7B /* Launcher */ = {
 			isa = PBXGroup;
 			children = (
@@ -156,12 +156,12 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-/* End PBXGroup section */
+/* PBXGroup 配置结束 */
 
-/* Begin PBXNativeTarget section */
+/* PBXNativeTarget 配置开始 */
 		3D600A3F22701A5A0068FB7B /* Launcher */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3D600A4B22701A5C0068FB7B /* Build configuration list for PBXNativeTarget "Launcher" */;
+			buildConfigurationList = 3D600A4B22701A5C0068FB7B /* PBXNativeTarget 的构建配置列表 "Launcher" */;
 			buildPhases = (
 				3D600A3C22701A5A0068FB7B /* Sources */,
 				3D600A3D22701A5A0068FB7B /* Frameworks */,
@@ -178,13 +178,13 @@
 		};
 		3DD4B64F226C1C3200451B7B /* BLEUnlock */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3DD4B65E226C1C3400451B7B /* Build configuration list for PBXNativeTarget "BLEUnlock" */;
+			buildConfigurationList = 3DD4B65E226C1C3400451B7B /* PBXNativeTarget 的构建配置列表 "BLEUnlock" */;
 			buildPhases = (
 				3DD4B64C226C1C3200451B7B /* Sources */,
 				3DD4B64D226C1C3200451B7B /* Frameworks */,
 				3DD4B64E226C1C3200451B7B /* Resources */,
-				3D600A5922701E5D0068FB7B /* CopyFiles */,
-				3D7C0F8022769F1F005A4C43 /* ShellScript */,
+				3D600A5922701E5D0068FB7B /* 复制文件 */,
+				3D7C0F8022769F1F005A4C43 /* 构建脚本 */,
 			);
 			buildRules = (
 			);
@@ -195,10 +195,10 @@
 			productReference = 3DD4B650226C1C3200451B7B /* BLEUnlock.app */;
 			productType = "com.apple.product-type.application";
 		};
-/* End PBXNativeTarget section */
+/* PBXNativeTarget 配置结束 */
 
-/* Begin PBXProject section */
-		3DD4B648226C1C3200451B7B /* Project object */ = {
+/* PBXProject 配置开始 */
+		3DD4B648226C1C3200451B7B /* 项目对象 */ = {
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 1020;
@@ -234,7 +234,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 3DD4B64B226C1C3200451B7B /* Build configuration list for PBXProject "BLEUnlock" */;
+			buildConfigurationList = 3DD4B64B226C1C3200451B7B /* PBXProject 的构建配置列表 "BLEUnlock" */;
 			compatibilityVersion = "Xcode 9.3";
 			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
@@ -251,14 +251,14 @@
 				3D600A3F22701A5A0068FB7B /* Launcher */,
 			);
 		};
-/* End PBXProject section */
+/* PBXProject 配置结束 */
 
-/* Begin PBXResourcesBuildPhase section */
+/* PBXResourcesBuildPhase 配置开始 */
 		3D600A3E22701A5A0068FB7B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3D4EE4152279E94B00AF9E93 /* MainMenu.xib in Resources */,
+				3D4EE4152279E94B00AF9E93 /* MainMenu.xib（资源） */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -266,18 +266,18 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CA0000000000000000000001 /* LICENSE in Resources */,
-				3D2FCF08226C99CB007A06E7 /* Images.xcassets in Resources */,
-				3D600A37226CC1A40068FB7B /* Localizable.strings in Resources */,
-				3D953797227853E20017D8B9 /* AboutBox.xib in Resources */,
-				3DD4B659226C1C3400451B7B /* MainMenu.xib in Resources */,
+				CA0000000000000000000001 /* LICENSE（资源） */,
+				3D2FCF08226C99CB007A06E7 /* Images.xcassets（资源） */,
+				3D600A37226CC1A40068FB7B /* Localizable.strings（资源） */,
+				3D953797227853E20017D8B9 /* AboutBox.xib（资源） */,
+				3DD4B659226C1C3400451B7B /* MainMenu.xib（资源） */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXResourcesBuildPhase section */
+/* PBXResourcesBuildPhase 配置结束 */
 
-/* Begin PBXShellScriptBuildPhase section */
-		3D7C0F8022769F1F005A4C43 /* ShellScript */ = {
+/* PBXShellScriptBuildPhase 配置开始 */
+		3D7C0F8022769F1F005A4C43 /* 构建脚本 */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -294,15 +294,15 @@
 			shellPath = /bin/bash;
 			shellScript = "buildNumber=$(/usr/libexec/PlistBuddy -c \"Print CFBundleVersion\" \"${PROJECT_DIR}/${INFOPLIST_FILE}\")\nbuildNumber=$(($buildNumber + 1))\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $buildNumber\" \"${PROJECT_DIR}/${INFOPLIST_FILE}\"\n";
 		};
-/* End PBXShellScriptBuildPhase section */
+/* PBXShellScriptBuildPhase 配置结束 */
 
-/* Begin PBXSourcesBuildPhase section */
+/* PBXSourcesBuildPhase 配置开始 */
 		3D600A3C22701A5A0068FB7B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3D4EE4112279E55A00AF9E93 /* AppDelegate.m in Sources */,
-				3D4EE4132279E56900AF9E93 /* main.m in Sources */,
+				3D4EE4112279E55A00AF9E93 /* AppDelegate.m（源码） */,
+				3D4EE4132279E56900AF9E93 /* main.m（源码） */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -310,19 +310,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3DD4B654226C1C3200451B7B /* AppDelegate.swift in Sources */,
-				3DD4B666226C1DF200451B7B /* BLE.swift in Sources */,
-				3DD4B664226C1CF000451B7B /* lowlevel.c in Sources */,
-				3DCAAA7D22ADE9830011A2DA /* checkUpdate.swift in Sources */,
-				3D95379522784D550017D8B9 /* AboutBox.swift in Sources */,
-				3D6070E226DBC68E00EE4E48 /* LEDeviceInfo.swift in Sources */,
-				3D79FD7D226C335100A373C0 /* appleDeviceNames.swift in Sources */,
+				3DD4B654226C1C3200451B7B /* AppDelegate.swift（源码） */,
+				3DD4B666226C1DF200451B7B /* BLE.swift（源码） */,
+				3DD4B664226C1CF000451B7B /* lowlevel.c（源码） */,
+				3DCAAA7D22ADE9830011A2DA /* checkUpdate.swift（源码） */,
+				3D95379522784D550017D8B9 /* AboutBox.swift（源码） */,
+				3D6070E226DBC68E00EE4E48 /* LEDeviceInfo.swift（源码） */,
+				3D79FD7D226C335100A373C0 /* appleDeviceNames.swift（源码） */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXSourcesBuildPhase section */
+/* PBXSourcesBuildPhase 配置结束 */
 
-/* Begin PBXVariantGroup section */
+/* PBXVariantGroup 配置开始 */
 		3D600A35226CC1A40068FB7B /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -349,9 +349,9 @@
 			name = MainMenu.xib;
 			sourceTree = "<group>";
 		};
-/* End PBXVariantGroup section */
+/* PBXVariantGroup 配置结束 */
 
-/* Begin XCBuildConfiguration section */
+/* XCBuildConfiguration 配置开始 */
 		3D600A4C22701A5C0068FB7B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -578,10 +578,10 @@
 			};
 			name = Release;
 		};
-/* End XCBuildConfiguration section */
+/* XCBuildConfiguration 配置结束 */
 
-/* Begin XCConfigurationList section */
-		3D600A4B22701A5C0068FB7B /* Build configuration list for PBXNativeTarget "Launcher" */ = {
+/* XCConfigurationList 配置开始 */
+		3D600A4B22701A5C0068FB7B /* PBXNativeTarget 的构建配置列表 "Launcher" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3D600A4C22701A5C0068FB7B /* Debug */,
@@ -590,7 +590,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3DD4B64B226C1C3200451B7B /* Build configuration list for PBXProject "BLEUnlock" */ = {
+		3DD4B64B226C1C3200451B7B /* PBXProject 的构建配置列表 "BLEUnlock" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3DD4B65C226C1C3400451B7B /* Debug */,
@@ -599,7 +599,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3DD4B65E226C1C3400451B7B /* Build configuration list for PBXNativeTarget "BLEUnlock" */ = {
+		3DD4B65E226C1C3400451B7B /* PBXNativeTarget 的构建配置列表 "BLEUnlock" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3DD4B65F226C1C3400451B7B /* Debug */,
@@ -608,7 +608,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-/* End XCConfigurationList section */
+/* XCConfigurationList 配置结束 */
 	};
-	rootObject = 3DD4B648226C1C3200451B7B /* Project object */;
+	rootObject = 3DD4B648226C1C3200451B7B /* 项目对象 */;
 }

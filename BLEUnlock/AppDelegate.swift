@@ -184,7 +184,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             { (playing) in
                 self.nowPlayingWasPlaying = playing
                 if self.nowPlayingWasPlaying {
-                    print("pause")
+                    print("暂停媒体播放")
                     MRMediaRemoteSendCommand(MRCommandPause, nil)
                 }
             }
@@ -194,7 +194,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     func playNowPlaying() {
         guard prefs.bool(forKey: "pauseItunes") else { return }
         if nowPlayingWasPlaying {
-            print("play")
+            print("恢复媒体播放")
             Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false, block: { _ in
                 MRMediaRemoteSendCommand(MRCommandPlay, nil)
                 self.nowPlayingWasPlaying = false
@@ -207,10 +207,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             NSWorkspace.shared.launchApplication("ScreenSaverEngine")
         } else {
             if SACLockScreenImmediate() != 0 {
-                print("Failed to lock screen")
+                print("锁定屏幕失败")
             }
             if prefs.bool(forKey: "sleepDisplay") {
-                print("sleep display")
+                print("关闭显示器")
                 sleepDisplay()
             }
         }
@@ -224,10 +224,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
                     userNotification = nil
                 }
                 if displaySleep && !systemSleep && prefs.bool(forKey: "wakeOnProximity") {
-                    print("Waking display")
+                    print("正在唤醒显示器")
                     wakeDisplay()
                     wakeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true, block: { _ in
-                        print("Retrying waking display")
+                        print("重新尝试唤醒显示器")
                         wakeDisplay()
                     })
                 }
@@ -246,7 +246,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
 
     func fakeKeyStrokes(_ string: String) {
         let src = CGEventSource(stateID: .hidSystemState)
-        // Send 20 characters per keyboard event. That seems to be the limit.
+        // 每次键盘事件最多发送 20 个字符，以适配系统限制。
         let PER = 20
         let uniCharCount = string.utf16.count
         var strIndex = string.utf16.startIndex
@@ -263,7 +263,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             CGEvent(keyboardEventSource: src, virtualKey: 49, keyDown: false)?.post(tap: .cghidEventTap)
         }
         
-        // Return key
+        // 发送回车键。
         CGEvent(keyboardEventSource: src, virtualKey: 52, keyDown: true)?.post(tap: .cghidEventTap)
         CGEvent(keyboardEventSource: src, virtualKey: 52, keyDown: false)?.post(tap: .cghidEventTap)
     }
@@ -285,9 +285,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         guard !displaySleep else { return }
 
         if inScreensaver {
-            // In screensaver, make sure Login panel is displayed
+            // 屏保运行时，先确保登录界面已经显示。
             let src = CGEventSource(stateID: .hidSystemState)
-            // Esc key down and up
+            // 按下并松开 Esc 键。
             CGEvent(keyboardEventSource: src, virtualKey: 0x35, keyDown: true)?.post(tap: .cghidEventTap)
             CGEvent(keyboardEventSource: src, virtualKey: 0x35, keyDown: false)?.post(tap: .cghidEventTap)
         }
@@ -298,7 +298,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             guard self.isScreenLocked() else { return }
             guard let password = self.fetchPassword(warn: true) else { return }
             
-            print("Entering password")
+            print("正在输入登录密码")
             self.unlockedAt = Date().timeIntervalSince1970
             self.fakeKeyStrokes(password)
             self.playNowPlaying()
@@ -307,8 +307,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
 
     @objc func onDisplayWake() {
-        print("display wake")
-        //unlockedAt = Date().timeIntervalSince1970
+        print("显示器已唤醒")
         displaySleep = false
         wakeTimer?.invalidate()
         wakeTimer = nil
@@ -316,32 +315,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
 
     @objc func onDisplaySleep() {
-        print("display sleep")
+        print("显示器已休眠")
         displaySleep = true
     }
 
     @objc func onSystemWake() {
-        print("system wake")
+        print("系统已唤醒")
         Timer.scheduledTimer(withTimeInterval: 1, repeats: false, block: { _ in
-            print("delayed system wake job")
-            NSApp.setActivationPolicy(.accessory) // Hide Dock icon again
+            print("执行系统唤醒后的延迟任务")
+            NSApp.setActivationPolicy(.accessory) // 再次隐藏程序坞图标。
             self.systemSleep = false
             self.tryUnlockScreen()
         })
     }
     
     @objc func onSystemSleep() {
-        print("system sleep")
+        print("系统已休眠")
         systemSleep = true
-        // Set activation policy to regular, so the CBCentralManager can scan for peripherals
-        // when the Bluetooth will become on again.
-        // This enables Dock icon but the screen is off anyway.
+        // 临时设为常规应用，让蓝牙重新开启后 CBCentralManager 能继续扫描设备。
+        // 这会显示程序坞图标，但此时屏幕已经关闭。
         NSApp.setActivationPolicy(.regular)
     }
 
     @objc func onUnlock() {
         Timer.scheduledTimer(withTimeInterval: 2, repeats: false, block: { _ in
-            print("onUnlock")
+            print("收到屏幕解锁事件")
             if Date().timeIntervalSince1970 >= self.unlockedAt + 10 {
                 if self.ble.unlockRSSI != self.ble.UNLOCK_DISABLED {
                     self.runScript("intruded")
@@ -356,12 +354,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
 
     @objc func onScreensaverStart() {
-        print("screensaver start")
+        print("屏幕保护程序已启动")
         inScreensaver = true
     }
 
     @objc func onScreensaverStop() {
-        print("screensaver stop")
+        print("屏幕保护程序已停止")
         inScreensaver = false
     }
 
@@ -424,7 +422,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         var item: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         if (status == errSecItemNotFound) {
-            print("Password is not stored")
+            print("尚未保存登录密码")
             if warn {
                 errorModal(t("password_not_set"))
             }
@@ -663,10 +661,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     func checkAccessibility() {
         let key = kAXTrustedCheckOptionPrompt.takeRetainedValue() as String
         if (!AXIsProcessTrustedWithOptions([key: true] as CFDictionary)) {
-            // Sometimes Prompt option above doesn't work.
-            // Actually trying to send key may open that dialog.
+            // 上面的权限提示选项有时不生效，发送一次按键可触发系统授权弹窗。
             let src = CGEventSource(stateID: .hidSystemState)
-            // "Fn" key down and up
+            // 按下并松开 Fn 键。
             CGEvent(keyboardEventSource: src, virtualKey: 63, keyDown: true)?.post(tap: .cghidEventTap)
             CGEvent(keyboardEventSource: src, virtualKey: 63, keyDown: false)?.post(tap: .cghidEventTap)
         }
@@ -724,9 +721,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         checkAccessibility()
         checkUpdate()
 
-        // Hide dock icon.
-        // This is required because we can't have LSUIElement set to true in Info.plist,
-        // otherwise CBCentralManager.scanForPeripherals won't work.
+        // 启动后隐藏程序坞图标。
+        // 不能直接在 Info.plist 中启用 LSUIElement，否则蓝牙设备扫描无法工作。
         NSApp.setActivationPolicy(.accessory)
     }
     

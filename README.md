@@ -2,7 +2,7 @@
 
 让随身的 iPhone、Apple Watch 或其他兼容蓝牙设备，帮助 Mac 在你离开时锁屏、回来时解锁。
 
-本项目是 [ts1/BLEUnlock](https://github.com/ts1/BLEUnlock) 的简体中文分支，基于上游 1.12.2。界面、通知、权限说明和使用文档以简体中文提供。应用名称暂时保留 BLEUnlock；原有设备选择、设置、钥匙串标识和脚本事件保持兼容。
+本项目是 [ts1/BLEUnlock](https://github.com/ts1/BLEUnlock) 的简体中文分支，基于上游 1.12.2。界面、通知、权限说明、运行日志、源码注释和使用文档以简体中文提供。应用名称暂时保留 BLEUnlock；原有设备选择、设置、钥匙串标识和脚本事件保持兼容。
 
 ## 能做什么
 
@@ -110,10 +110,16 @@ xcodebuild -project BLEUnlock.xcodeproj -scheme BLEUnlock \
 
 编译结果在 `build/Build/Products/Debug/BLEUnlock.app`。运行 `python3 scripts/check_localization.py build/Build/Products/Debug/BLEUnlock.app` 检查打包资源。GitHub Actions 执行同样的检查并提供预览包。
 
-`ponytail:` 本分支只打包 Base 和简体中文资源，通过系统原生语言回退提供中文界面；其他上游语言文件保留在源码中。如以后恢复多语言，应补齐新文案并重新加入工程资源。
+源码约定（`ponytail:`）：本分支只打包 Base 和简体中文资源，通过系统原生语言回退提供中文界面；已移除停用的外语资源，旧版说明入口跳转到本文。如以后恢复多语言，应补齐翻译并重新加入工程资源。
 
 ## 来源与许可
 
 原作者为 Takeshi Sone。感谢上游作者、中文翻译贡献者 peiit 及所有贡献者。完整上游贡献记录请见[原项目](https://github.com/ts1/BLEUnlock)。
 
-本项目采用 MIT 许可证，英文原文及原有图标来源声明见 [LICENSE](LICENSE)，同时随应用打包。图标源自 materialdesignicons.com，由 Google LLC 设计，采用 Apache 2.0 许可证。“关于”窗口中的中文许可内容为参考译文。
+本项目采用 MIT 许可证，[许可说明](LICENSE)首先提供完整中文译文，并保留原始英文许可及图标来源声明，同时随应用打包。图标源自 materialdesignicons.com，由 Google LLC 设计，采用 Apache 2.0 许可证。“关于”窗口中的中文许可内容为参考译文。
+
+## 中文呈现约定
+
+面向使用者和维护者的自然语言内容统一使用简体中文，包括项目简介、说明文档、变更说明、界面文案、运行日志、脚本提示与解释性注释。
+
+程序标识符、系统接口、协议字段、配置键、路径、命令和品牌名称保留原样；设备自定义名称按设备实际名称显示。原始英文许可声明作为必须保留的来源材料附载，前面提供完整中文说明。系统自身生成的权限弹窗和外部命令输出由操作系统或对应工具决定。

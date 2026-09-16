@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""从系统设备资料生成机型表，规格说明使用中文，型号标识保持原样。"""
 import re, json
 from glob import glob
 from subprocess import Popen, PIPE
@@ -23,6 +24,9 @@ def parse_info(filename):
                 name = re.sub(r'Model A?\d+(, A?\d+)*', '', name)
                 name = re.sub(r' *?\)', ')', name)
                 name = re.sub(r' \(\)', '', name)
+                name = re.sub(r'(\d+)(?:st|nd|rd|th) generation', r'第 \1 代', name)
+                name = name.replace('-inch', ' 英寸').replace('Rev A', '修订版 A').replace('Cellular', '蜂窝网络')
+                name = re.sub(r'(\d+)mm', r'\1 毫米', name)
                 mapping[code] = name
 
 for f in glob('/System/Library/CoreServices/CoreTypes.bundle/Contents/Library/MobileDevices*.bundle/Contents/Info.plist'):

@@ -53,7 +53,7 @@ class Device: NSObject {
                     blName = getNameFromMAC(mac)
                 }
                 if let name = blName {
-                    // If it's just "iPhone" or "iPad", there's a chance we can get the model name in the following code
+                    // 名称只有 iPhone 或 iPad 时，继续尝试获取具体机型。
                     if name != "iPhone" && name != "iPad" {
                         return name
                     }
@@ -77,7 +77,7 @@ class Device: NSObject {
             if let mod = model {
                 return mod
             }
-            // iBeacon
+            // 解析 iBeacon 信标。
             if let adv = advData {
                 if adv.count >= 25 {
                     var iBeaconPrefix : [uint16] = [0x004c, 0x01502]
@@ -95,7 +95,7 @@ class Device: NSObject {
                 return name
             }
             if let mac = macAddr {
-                return mac // better than uuid
+                return mac // 优先显示比 UUID 更易识别的地址。
             }
             return uuid.description
         }
@@ -143,7 +143,6 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func scanForPeripherals() {
         guard !centralMgr.isScanning else { return }
         centralMgr.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
-        //print("Start scanning")
     }
 
     func startScanning() {
@@ -187,7 +186,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func resetSignalTimer() {
         signalTimer?.invalidate()
         signalTimer = Timer.scheduledTimer(withTimeInterval: signalTimeout, repeats: false, block: { _ in
-            print("Device is lost")
+            print("设备信号已丢失")
             self.delegate?.updateRSSI(rssi: nil, active: false)
             if self.presence {
                 self.presence = false
@@ -202,13 +201,13 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn:
-            print("Bluetooth powered on")
+            print("蓝牙已开启")
             if activeModeTimer == nil {
                 scanForPeripherals()
             }
             powerWarn = false
         case .poweredOff:
-            print("Bluetooth powered off")
+            print("蓝牙已关闭")
             presence = false
             signalTimer?.invalidate()
             signalTimer = nil
@@ -233,12 +232,11 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func updateMonitoredPeripheral(_ rssi: Int) {
-        // print(String(format: "rssi: %d", rssi))
         if rssi >= (unlockRSSI == UNLOCK_DISABLED ? lockRSSI : unlockRSSI) && !presence {
-            print("Device is close")
+            print("设备已靠近")
             presence = true
             delegate?.updatePresence(presence: presence, reason: "close")
-            latestRSSIs.removeAll() // Avoid bouncing
+            latestRSSIs.removeAll() // 清除旧样本，避免状态反复跳变。
         }
 
         let estimatedRSSI = getEstimatedRSSI(rssi: rssi)
@@ -247,18 +245,18 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         if estimatedRSSI >= (lockRSSI == LOCK_DISABLED ? unlockRSSI : lockRSSI) {
             if let timer = proximityTimer {
                 timer.invalidate()
-                print("Proximity timer canceled")
+                print("已取消延迟锁定计时")
                 proximityTimer = nil
             }
         } else if presence && proximityTimer == nil {
             proximityTimer = Timer.scheduledTimer(withTimeInterval: proximityTimeout, repeats: false, block: { _ in
-                print("Device is away")
+                print("设备已远离")
                 self.presence = false
                 self.delegate?.updatePresence(presence: self.presence, reason: "away")
                 self.proximityTimer = nil
             })
             RunLoop.main.add(proximityTimer!, forMode: .common)
-            print("Proximity timer started")
+            print("已开始延迟锁定计时")
         }
         resetSignalTimer()
     }
@@ -280,24 +278,24 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func connectMonitoredPeripheral() {
         guard let p = monitoredPeripheral else { return }
 
-        // Idk why but this works like a charm when 'didConnect' won't get called.
-        // However, this generates warnings in the log.
+        // 当 didConnect 回调没有触发时，预先读取信号可帮助恢复连接。
+        // 原因尚不明确，此操作可能产生系统警告日志。
         p.readRSSI()
 
         guard p.state == .disconnected else { return }
-        print("Connecting")
+        print("正在连接设备")
         centralMgr.connect(p, options: nil)
         connectionTimer?.invalidate()
         connectionTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: false, block: { _ in
             if p.state == .connecting {
-                print("Connection timeout")
+                print("设备连接超时")
                 self.centralMgr.cancelPeripheralConnection(p)
             }
         })
         RunLoop.main.add(connectionTimer!, forMode: .common)
     }
 
-    //MARK:- CBCentralManagerDelegate start
+    // MARK: - 蓝牙中心管理器回调
 
     func centralManager(_ central: CBCentralManager,
                         didDiscover peripheral: CBPeripheral,
@@ -311,7 +309,6 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                     monitoredPeripheral = peripheral
                 }
                 if activeModeTimer == nil {
-                    //print("Discover \(rssi)dBm")
                     updateMonitoredPeripheral(rssi)
                     if !passiveMode {
                         connectMonitoredPeripheral()
@@ -324,7 +321,6 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             if let uuids = advertisementData["kCBAdvDataServiceUUIDs"] as? [CBUUID] {
                 for uuid in uuids {
                     if uuid == ExposureNotification {
-                        //print("Device \(peripheral.identifier) Exposure Notification")
                         return
                     }
                 }
@@ -358,32 +354,30 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             peripheral.discoverServices([DeviceInformation])
         }
         if peripheral == monitoredPeripheral && !passiveMode {
-            print("Connected")
+            print("设备已连接")
             connectionTimer?.invalidate()
             connectionTimer = nil
             peripheral.readRSSI()
         }
     }
 
-    //MARK:CBCentralManagerDelegate end -
     
-    //MARK:- CBPeripheralDelegate start
+    // MARK: - 蓝牙外设回调
 
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
         guard peripheral == monitoredPeripheral else { return }
         let rssi = RSSI.intValue > 0 ? 0 : RSSI.intValue
-        //print("readRSSI \(rssi)dBm")
         updateMonitoredPeripheral(rssi)
         lastReadAt = Date().timeIntervalSince1970
 
         if activeModeTimer == nil && !passiveMode {
-            print("Entering active mode")
+            print("已进入主动模式")
             if !scanMode {
                 centralMgr.stopScan()
             }
             activeModeTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true, block: { _ in
                 if Date().timeIntervalSince1970 > self.lastReadAt + 10 {
-                    print("Falling back to passive mode")
+                    print("已回退到被动模式")
                     self.centralMgr.cancelPeripheralConnection(peripheral)
                     self.activeModeTimer?.invalidate()
                     self.activeModeTimer = nil
@@ -451,7 +445,6 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     {
         peripheral.discoverServices([DeviceInformation])
     }
-    //MARK:CBPeripheralDelegate end -
 
     override init() {
         super.init()

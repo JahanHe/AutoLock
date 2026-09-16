@@ -1,5 +1,5 @@
 //
-//  Use this file to import your target's public headers that you would like to expose to Swift.
+// 在此导入需要向 Swift 暴露的公共头文件。
 //
 
 #include "lowlevel.h"

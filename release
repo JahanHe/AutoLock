@@ -3,7 +3,7 @@
 set -o pipefail
 
 if [ ! "$PASSWORD" ]; then
-    echo set app-specific password in PASSWORD env var
+    echo "请先在 PASSWORD 环境变量中设置应用专用密码。"
     exit 1
 fi
 
@@ -49,7 +49,6 @@ notarize() {
     xcrun stapler staple $app
 }
 
-#rm -rf $BUILDDIR
 
 test -d $TMPDIR || mkdir -p $TMPDIR
 
