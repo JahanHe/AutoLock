@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CA0000000000000000000001 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = CA0000000000000000000002 /* LICENSE */; };
 		3D2CF85B255102B300157996 /* MediaRemote.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3D2CF85A255102B300157996 /* MediaRemote.framework */; };
 		3D2FCF08226C99CB007A06E7 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3D2FCF07226C99CB007A06E7 /* Images.xcassets */; };
 		3D4EE4112279E55A00AF9E93 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D4EE4102279E55A00AF9E93 /* AppDelegate.m */; };
@@ -40,22 +41,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CA0000000000000000000002 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		3D2CF85A255102B300157996 /* MediaRemote.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaRemote.framework; path = ../../../../System/Library/PrivateFrameworks/MediaRemote.framework; sourceTree = "<group>"; };
 		3D2FCF07226C99CB007A06E7 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
-		3D43D0112765FCCB00D15991 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/AboutBox.strings; sourceTree = "<group>"; };
-		3D43D0122765FCCB00D15991 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
-		3D43D0132765FCFD00D15991 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = da; path = da.lproj/AboutBox.strings; sourceTree = "<group>"; };
-		3D43D0142765FCFD00D15991 /* da */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = da; path = da.lproj/Localizable.strings; sourceTree = "<group>"; };
-		3D43D0152765FD1600D15991 /* nb */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nb; path = nb.lproj/AboutBox.strings; sourceTree = "<group>"; };
-		3D43D0162765FD1600D15991 /* nb */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = nb; path = nb.lproj/Localizable.strings; sourceTree = "<group>"; };
-		3D43D0172765FD2800D15991 /* sv */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sv; path = sv.lproj/AboutBox.strings; sourceTree = "<group>"; };
-		3D43D0182765FD2800D15991 /* sv */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sv; path = sv.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3D4EE40F2279E55A00AF9E93 /* AppDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		3D4EE4102279E55A00AF9E93 /* AppDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
 		3D4EE4122279E56900AF9E93 /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		3D4EE4142279E94B00AF9E93 /* MainMenu.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = MainMenu.xib; sourceTree = "<group>"; };
 		3D600A36226CC1A40068FB7B /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Base; path = Base.lproj/Localizable.strings; sourceTree = "<group>"; };
-		3D600A38226CC1AA0068FB7B /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3D600A4022701A5A0068FB7B /* Launcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Launcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3D600A4922701A5C0068FB7B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3D600A4A22701A5C0068FB7B /* Launcher.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Launcher.entitlements; sourceTree = "<group>"; };
@@ -63,7 +56,6 @@
 		3D79FD7C226C335100A373C0 /* appleDeviceNames.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = appleDeviceNames.swift; sourceTree = "<group>"; };
 		3D95379322784D550017D8B9 /* AboutBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutBox.swift; sourceTree = "<group>"; };
 		3D953798227853E20017D8B9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/AboutBox.xib; sourceTree = "<group>"; };
-		3D95379B227853EC0017D8B9 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/AboutBox.strings; sourceTree = "<group>"; };
 		3DC0BC6922728FF1001145EC /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3DCAAA7C22ADE9830011A2DA /* checkUpdate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = checkUpdate.swift; sourceTree = "<group>"; };
 		3DD4B650226C1C3200451B7B /* BLEUnlock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BLEUnlock.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -77,8 +69,6 @@
 		3DD4B668226C1E3700451B7B /* login.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = login.framework; path = ../../../../System/Library/PrivateFrameworks/login.framework; sourceTree = "<group>"; };
 		B1EFF91422E010F50010DB0A /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/AboutBox.strings"; sourceTree = "<group>"; };
 		B1EFF91622E010F50010DB0A /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
-		F749D28C277515C600C78C28 /* tr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = tr; path = tr.lproj/AboutBox.strings; sourceTree = "<group>"; };
-		F749D28D277515C600C78C28 /* tr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = tr; path = tr.lproj/Localizable.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +108,7 @@
 		3DD4B647226C1C3200451B7B = {
 			isa = PBXGroup;
 			children = (
+				CA0000000000000000000002 /* LICENSE */,
 				3DD4B652226C1C3200451B7B /* BLEUnlock */,
 				3D600A4122701A5B0068FB7B /* Launcher */,
 				3DD4B651226C1C3200451B7B /* Products */,
@@ -245,18 +236,11 @@
 			};
 			buildConfigurationList = 3DD4B64B226C1C3200451B7B /* Build configuration list for PBXProject "BLEUnlock" */;
 			compatibilityVersion = "Xcode 9.3";
-			developmentRegion = en;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
 				Base,
-				ja,
 				"zh-Hans",
-				de,
-				da,
-				nb,
-				sv,
-				tr,
 			);
 			mainGroup = 3DD4B647226C1C3200451B7B;
 			productRefGroup = 3DD4B651226C1C3200451B7B /* Products */;
@@ -282,6 +266,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CA0000000000000000000001 /* LICENSE in Resources */,
 				3D2FCF08226C99CB007A06E7 /* Images.xcassets in Resources */,
 				3D600A37226CC1A40068FB7B /* Localizable.strings in Resources */,
 				3D953797227853E20017D8B9 /* AboutBox.xib in Resources */,
@@ -342,13 +327,7 @@
 			isa = PBXVariantGroup;
 			children = (
 				3D600A36226CC1A40068FB7B /* Base */,
-				3D600A38226CC1AA0068FB7B /* ja */,
 				B1EFF91622E010F50010DB0A /* zh-Hans */,
-				3D43D0122765FCCB00D15991 /* de */,
-				3D43D0142765FCFD00D15991 /* da */,
-				3D43D0162765FD1600D15991 /* nb */,
-				3D43D0182765FD2800D15991 /* sv */,
-				F749D28D277515C600C78C28 /* tr */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
@@ -357,13 +336,7 @@
 			isa = PBXVariantGroup;
 			children = (
 				3D953798227853E20017D8B9 /* Base */,
-				3D95379B227853EC0017D8B9 /* ja */,
 				B1EFF91422E010F50010DB0A /* zh-Hans */,
-				3D43D0112765FCCB00D15991 /* de */,
-				3D43D0132765FCFD00D15991 /* da */,
-				3D43D0152765FD1600D15991 /* nb */,
-				3D43D0172765FD2800D15991 /* sv */,
-				F749D28C277515C600C78C28 /* tr */,
 			);
 			name = AboutBox.xib;
 			sourceTree = "<group>";

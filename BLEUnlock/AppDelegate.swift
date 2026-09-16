@@ -119,7 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     func updateRSSI(rssi: Int?, active: Bool) {
         if let r = rssi {
             lastRSSI = r
-            monitorMenuItem?.title = String(format:"%ddBm", r) + (active ? " (Active)" : "")
+            monitorMenuItem?.title = String(format:"%ddBm", r) + (active ? "（" + t("active_mode") + "）" : "")
             if (!connected) {
                 connected = true
                 statusItem.button?.image = NSImage(named: "StatusBarConnected")
@@ -159,7 +159,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     func userNotificationCenter(_ center: NSUserNotificationCenter,
                                 didActivate notification: NSUserNotification) {
         if notification != userNotification {
-            NSWorkspace.shared.open(URL(string: "https://github.com/ts1/BLEUnlock/releases")!)
+            NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/MacAutolock/releases")!)
             NSUserNotificationCenter.default.removeDeliveredNotification(notification)
         }
     }
@@ -388,6 +388,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         let alert = NSAlert()
         alert.messageText = msg
         alert.informativeText = info ?? ""
+        alert.addButton(withTitle: t("ok"))
         alert.window.title = "BLEUnlock"
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
@@ -406,8 +407,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         SecItemDelete(query as CFDictionary)
         let status = SecItemAdd(query as CFDictionary, nil)
         guard status == errSecSuccess else {
-            let err = SecCopyErrorMessageString(status, nil)
-            errorModal("Failed to store password to Keychain", info: err as String? ?? "Status \(status)")
+            errorModal(t("password_store_failed"), info: String(format: t("keychain_error"), status))
             return
         }
     }
@@ -431,12 +431,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             return nil
         }
         guard status == errSecSuccess else {
-            let info = SecCopyErrorMessageString(status, nil)
-            errorModal("Failed to retrieve password", info: info as String? ?? "Status \(status)")
+            errorModal(t("password_read_failed"), info: String(format: t("keychain_error"), status))
             return nil
         }
         guard let data = item as? Data else {
-            errorModal("Failed to convert password")
+            errorModal(t("password_decode_failed"))
             return nil
         }
         return String(data: data, encoding: .utf8)!
