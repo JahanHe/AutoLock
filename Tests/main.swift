@@ -121,7 +121,7 @@ do {
 
 // 使用临时目录验证退出后读取、轮转、导出与清空，不碰用户的实际诊断日志。
 do {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MacAutolock-日志检查-\(UUID().uuidString)")
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AutoLock-日志检查-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: directory) }
     let log = DiagnosticLog(directory: directory, sizeLimit: 300)
     try log.append(.init(message: "设备已远离"))

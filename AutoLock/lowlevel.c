@@ -4,5 +4,5 @@
 void wakeDisplay(void)
 {
     static IOPMAssertionID assertionID;
-    IOPMAssertionDeclareUserActivity(CFSTR("BLEUnlock"), kIOPMUserActiveLocal, &assertionID);
+    IOPMAssertionDeclareUserActivity(CFSTR("AutoLock"), kIOPMUserActiveLocal, &assertionID);
 }

@@ -17,7 +17,7 @@
 		3D4EE4132279E56900AF9E93 /* main.m（源码） */ = {isa = PBXBuildFile; fileRef = 3D4EE4122279E56900AF9E93 /* main.m */; };
 		3D4EE4152279E94B00AF9E93 /* MainMenu.xib（资源） */ = {isa = PBXBuildFile; fileRef = 3D4EE4142279E94B00AF9E93 /* MainMenu.xib */; };
 		3D600A37226CC1A40068FB7B /* Localizable.strings（资源） */ = {isa = PBXBuildFile; fileRef = 3D600A35226CC1A40068FB7B /* Localizable.strings */; };
-		3D600A5A22701E740068FB7B /* Launcher.app（复制文件） */ = {isa = PBXBuildFile; fileRef = 3D600A4022701A5A0068FB7B /* Launcher.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3D600A5A22701E740068FB7B /* AutoLockLauncher.app（复制文件） */ = {isa = PBXBuildFile; fileRef = 3D600A4022701A5A0068FB7B /* AutoLockLauncher.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3D6070E226DBC68E00EE4E48 /* LEDeviceInfo.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3D6070E126DBC68E00EE4E48 /* LEDeviceInfo.swift */; };
 		3D79FD7D226C335100A373C0 /* appleDeviceNames.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3D79FD7C226C335100A373C0 /* appleDeviceNames.swift */; };
 		3D95379522784D550017D8B9 /* AboutBox.swift（源码） */ = {isa = PBXBuildFile; fileRef = 3D95379322784D550017D8B9 /* AboutBox.swift */; };
@@ -37,7 +37,7 @@
 			dstPath = Contents/Library/LoginItems;
 			dstSubfolderSpec = 1;
 			files = (
-				3D600A5A22701E740068FB7B /* Launcher.app（复制文件） */,
+				3D600A5A22701E740068FB7B /* AutoLockLauncher.app（复制文件） */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,7 +55,7 @@
 		3D4EE4122279E56900AF9E93 /* main.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		3D4EE4142279E94B00AF9E93 /* MainMenu.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = MainMenu.xib; sourceTree = "<group>"; };
 		3D600A36226CC1A40068FB7B /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Base; path = Base.lproj/Localizable.strings; sourceTree = "<group>"; };
-		3D600A4022701A5A0068FB7B /* Launcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Launcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3D600A4022701A5A0068FB7B /* AutoLockLauncher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoLockLauncher.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3D600A4922701A5C0068FB7B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3D600A4A22701A5C0068FB7B /* Launcher.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Launcher.entitlements; sourceTree = "<group>"; };
 		3D6070E126DBC68E00EE4E48 /* LEDeviceInfo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LEDeviceInfo.swift; sourceTree = "<group>"; };
@@ -64,11 +64,11 @@
 		3D953798227853E20017D8B9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/AboutBox.xib; sourceTree = "<group>"; };
 		3DC0BC6922728FF1001145EC /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3DCAAA7C22ADE9830011A2DA /* checkUpdate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = checkUpdate.swift; sourceTree = "<group>"; };
-		3DD4B650226C1C3200451B7B /* BLEUnlock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BLEUnlock.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3DD4B650226C1C3200451B7B /* AutoLock.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoLock.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DD4B653226C1C3200451B7B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		3DD4B658226C1C3400451B7B /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
-		3DD4B65B226C1C3400451B7B /* BLEUnlock.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BLEUnlock.entitlements; sourceTree = "<group>"; };
-		3DD4B661226C1CEF00451B7B /* BLEUnlock-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "BLEUnlock-Bridging-Header.h"; sourceTree = "<group>"; };
+		3DD4B65B226C1C3400451B7B /* AutoLock.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AutoLock.entitlements; sourceTree = "<group>"; };
+		3DD4B661226C1CEF00451B7B /* AutoLock-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "AutoLock-Bridging-Header.h"; sourceTree = "<group>"; };
 		3DD4B662226C1CEF00451B7B /* lowlevel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lowlevel.h; sourceTree = "<group>"; };
 		3DD4B663226C1CF000451B7B /* lowlevel.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lowlevel.c; sourceTree = "<group>"; };
 		3DD4B665226C1DF200451B7B /* BLE.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLE.swift; sourceTree = "<group>"; };
@@ -115,7 +115,7 @@
 			isa = PBXGroup;
 			children = (
 				CA0000000000000000000002 /* LICENSE */,
-				3DD4B652226C1C3200451B7B /* BLEUnlock */,
+				3DD4B652226C1C3200451B7B /* AutoLock */,
 				3D600A4122701A5B0068FB7B /* Launcher */,
 				3DD4B651226C1C3200451B7B /* Products */,
 				3DD4B667226C1E3700451B7B /* Frameworks */,
@@ -125,13 +125,13 @@
 		3DD4B651226C1C3200451B7B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3DD4B650226C1C3200451B7B /* BLEUnlock.app */,
-				3D600A4022701A5A0068FB7B /* Launcher.app */,
+				3DD4B650226C1C3200451B7B /* AutoLock.app */,
+				3D600A4022701A5A0068FB7B /* AutoLockLauncher.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		3DD4B652226C1C3200451B7B /* BLEUnlock */ = {
+		3DD4B652226C1C3200451B7B /* AutoLock */ = {
 			isa = PBXGroup;
 			children = (
 				3D95379322784D550017D8B9 /* AboutBox.swift */,
@@ -148,12 +148,12 @@
 				3DD4B662226C1CEF00451B7B /* lowlevel.h */,
 				3DD4B663226C1CF000451B7B /* lowlevel.c */,
 				3DD4B657226C1C3400451B7B /* MainMenu.xib */,
-				3DD4B65B226C1C3400451B7B /* BLEUnlock.entitlements */,
-				3DD4B661226C1CEF00451B7B /* BLEUnlock-Bridging-Header.h */,
+				3DD4B65B226C1C3400451B7B /* AutoLock.entitlements */,
+				3DD4B661226C1CEF00451B7B /* AutoLock-Bridging-Header.h */,
 				3D79FD7C226C335100A373C0 /* appleDeviceNames.swift */,
 				3D2FCF07226C99CB007A06E7 /* Images.xcassets */,
 			);
-			path = BLEUnlock;
+			path = AutoLock;
 			sourceTree = "<group>";
 		};
 		3DD4B667226C1E3700451B7B /* Frameworks */ = {
@@ -182,12 +182,12 @@
 			);
 			name = Launcher;
 			productName = Launcher;
-			productReference = 3D600A4022701A5A0068FB7B /* Launcher.app */;
+			productReference = 3D600A4022701A5A0068FB7B /* AutoLockLauncher.app */;
 			productType = "com.apple.product-type.application";
 		};
-		3DD4B64F226C1C3200451B7B /* BLEUnlock */ = {
+		3DD4B64F226C1C3200451B7B /* AutoLock */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3DD4B65E226C1C3400451B7B /* PBXNativeTarget 的构建配置列表 "BLEUnlock" */;
+			buildConfigurationList = 3DD4B65E226C1C3400451B7B /* PBXNativeTarget 的构建配置列表 "AutoLock" */;
 			buildPhases = (
 				3DD4B64C226C1C3200451B7B /* Sources */,
 				3DD4B64D226C1C3200451B7B /* Frameworks */,
@@ -198,9 +198,9 @@
 			);
 			dependencies = (
 			);
-			name = BLEUnlock;
-			productName = BLEUnlock;
-			productReference = 3DD4B650226C1C3200451B7B /* BLEUnlock.app */;
+			name = AutoLock;
+			productName = AutoLock;
+			productReference = 3DD4B650226C1C3200451B7B /* AutoLock.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* PBXNativeTarget 配置结束 */
@@ -242,7 +242,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 3DD4B64B226C1C3200451B7B /* PBXProject 的构建配置列表 "BLEUnlock" */;
+			buildConfigurationList = 3DD4B64B226C1C3200451B7B /* PBXProject 的构建配置列表 "AutoLock" */;
 			compatibilityVersion = "Xcode 9.3";
 			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
@@ -255,7 +255,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				3DD4B64F226C1C3200451B7B /* BLEUnlock */,
+				3DD4B64F226C1C3200451B7B /* AutoLock */,
 				3D600A3F22701A5A0068FB7B /* Launcher */,
 			);
 		};
@@ -361,7 +361,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = jp.sone.BLEUnlock.Launcher;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = AutoLockLauncher;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -385,7 +385,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = jp.sone.BLEUnlock.Launcher;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = AutoLockLauncher;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -445,6 +445,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ARCHS = arm64;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -502,6 +503,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ARCHS = arm64;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -515,14 +517,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = BLEUnlock/BLEUnlock.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AutoLock/AutoLock.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = 42LGPQYC7M;
 				ENABLE_HARDENED_RUNTIME = YES;
 				FRAMEWORK_SEARCH_PATHS = "";
-				INFOPLIST_FILE = BLEUnlock/Info.plist;
+				INFOPLIST_FILE = AutoLock/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -531,7 +533,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = jp.sone.BLEUnlock;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "BLEUnlock/BLEUnlock-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "AutoLock/AutoLock-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = (
@@ -546,14 +548,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = BLEUnlock/BLEUnlock.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AutoLock/AutoLock.entitlements;
 				CODE_SIGN_IDENTITY = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = 42LGPQYC7M;
 				ENABLE_HARDENED_RUNTIME = YES;
 				FRAMEWORK_SEARCH_PATHS = "";
-				INFOPLIST_FILE = BLEUnlock/Info.plist;
+				INFOPLIST_FILE = AutoLock/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -562,7 +564,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = jp.sone.BLEUnlock;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "BLEUnlock/BLEUnlock-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "AutoLock/AutoLock-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				SYSTEM_FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -583,7 +585,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3DD4B64B226C1C3200451B7B /* PBXProject 的构建配置列表 "BLEUnlock" */ = {
+		3DD4B64B226C1C3200451B7B /* PBXProject 的构建配置列表 "AutoLock" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3DD4B65C226C1C3400451B7B /* Debug */,
@@ -592,7 +594,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3DD4B65E226C1C3400451B7B /* PBXNativeTarget 的构建配置列表 "BLEUnlock" */ = {
+		3DD4B65E226C1C3400451B7B /* PBXNativeTarget 的构建配置列表 "AutoLock" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3DD4B65F226C1C3400451B7B /* Debug */,

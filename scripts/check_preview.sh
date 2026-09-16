@@ -2,10 +2,10 @@
 # 在隔离模式启动实际应用，检查开关联动并截图；不会触发系统锁定。
 set -eu
 if [ "$#" -ne 2 ]; then
-  echo "用法：scripts/check_preview.sh /绝对路径/BLEUnlock.app /绝对路径/预览目录" >&2
+  echo "用法：scripts/check_preview.sh /绝对路径/AutoLock.app /绝对路径/预览目录" >&2
   exit 2
 fi
-"$1/Contents/MacOS/BLEUnlock" --preview --capture "$2"
+"$1/Contents/MacOS/AutoLock" --preview --capture "$2"
 python3 - "$2" <<'PY'
 from pathlib import Path
 import json

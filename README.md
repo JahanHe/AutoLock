@@ -1,8 +1,8 @@
-# MacAutolock · 中文自动锁定工具
+# AutoLock · 中文自动锁定工具
 
 离开时自动锁定 Mac；回来时可以只唤醒屏幕，把解锁交给 Apple Watch、Touch ID 或自己输入密码。
 
-本项目由 [ts1/BLEUnlock](https://github.com/ts1/BLEUnlock) 1.12.2 改进而来，当前版本为 **1.13.0 中文测试版**。新增原生设置窗口、菜单栏红绿状态灯、分组开关、逐项解释和效果预览。软件仍使用 `BLEUnlock.app`、原有偏好设置和钥匙串标识，以兼容旧版安装。
+本项目由 [ts1/BLEUnlock](https://github.com/ts1/BLEUnlock) 1.12.2 改进而来，当前版本为 **1.13.1 中文测试版**。新增原生设置窗口、菜单栏红绿状态灯、分组开关、逐项解释和效果预览。应用、菜单、窗口、安装文件和诊断包统一使用 **AutoLock**，安装后为 `AutoLock.app`。为继承已有设置、钥匙串和登录项，内部应用标识继续使用原值。
 
 ## 实际运行窗口截图
 
@@ -32,12 +32,12 @@ RSSI 是蓝牙信号强度，单位为 dBm。-50 通常比 -80 更近，但无�
 
 ## 安装与开始使用
 
-需要 **macOS 13 或更新版本**及支持低功耗蓝牙的 Mac。本版适配当前 macOS 的原生窗口、通知和登录项接口。具体硬件上的自动锁屏、蓝牙唤醒和 Apple Watch 解锁需要按下方步骤实测。
+需要 **Apple 芯片 Mac（M1 或更新）**和 **macOS 13 或更新版本**。当前及后续安装包仅构建 `arm64`。本版适配当前 macOS 的原生窗口、通知和登录项接口。具体硬件上的自动锁屏、蓝牙唤醒和 Apple Watch 解锁需要按下方步骤实测。
 
-安装包以[本仓库发布页](https://github.com/JahanHe/MacAutolock/releases)或交付的中文测试包为准。[构建记录](https://github.com/JahanHe/MacAutolock/actions)也提供编译产物。`brew install bleunlock` 安装的是上游版本，不是本分支。
+安装包以[本仓库发布页](https://github.com/JahanHe/AutoLock/releases)或交付的中文测试包为准。[构建记录](https://github.com/JahanHe/AutoLock/actions)也提供编译产物。`brew install bleunlock` 安装的是上游版本，不是本分支。
 
-1. 退出正在运行的旧版 BLEUnlock，避免两个版本同时处理蓝牙和锁屏。
-2. 将 `BLEUnlock.app` 放入“应用程序”后打开。测试包未经 Developer ID 签名与苹果公证；如果系统拦截，请在“系统设置 → 隐私与安全性”确认来源后允许打开，无需关闭系统安全保护。
+1. 退出正在运行的旧版 BLEUnlock、MacAutolock 或 AutoLock，避免两个版本同时处理蓝牙和锁屏。
+2. 将 `AutoLock.app` 放入“应用程序”后打开。更名不会自动删除此前安装的 `BLEUnlock.app`，请避免旧版同时运行。测试包未经 Developer ID 签名与苹果公证；如果系统拦截，请在“系统设置 → 隐私与安全性”确认来源后允许打开，无需关闭系统安全保护。
 3. 允许蓝牙访问。启动后自动显示“设置与测试”窗口。
 4. 打开“随身设备”，点击“扫描附近设备（15 秒）”，选择随身携带的 iPhone 或其他兼容设备。
 5. 等菜单栏图标旁的灯变绿，先点击“效果测试 → 立即锁定”验证当前系统的锁屏能力，再做实际离开测试。
@@ -169,10 +169,10 @@ RSSI 是蓝牙信号强度，单位为 dBm。-50 通常比 -80 更近，但无�
 ```sh
 python3 scripts/check_localization.py
 scripts/check_behavior.sh
-xcodebuild -project BLEUnlock.xcodeproj -scheme BLEUnlock \
+xcodebuild -project AutoLock.xcodeproj -scheme AutoLock \
   -configuration Release -derivedDataPath build \
-  CODE_SIGNING_ALLOWED=NO build
-python3 scripts/check_localization.py build/Build/Products/Release/BLEUnlock.app
+  CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build
+python3 scripts/check_localization.py build/Build/Products/Release/AutoLock.app
 ```
 
 GitHub Actions 执行同样的检查，并提供中文测试产物。编译成功不代表已完成硬件验收。
@@ -180,10 +180,10 @@ GitHub Actions 执行同样的检查，并提供中文测试产物。编译成�
 应用支持隔离演示模式：
 
 ```sh
-build/Build/Products/Release/BLEUnlock.app/Contents/MacOS/BLEUnlock --preview
+build/Build/Products/Release/AutoLock.app/Contents/MacOS/AutoLock --preview
 ```
 
-演示模式使用独立临时偏好，不创建蓝牙管理器、不访问登录密码、不注册登录项，也不会执行锁屏、按键、通知、脚本或屏幕操作。可追加 `--capture /绝对路径/预览目录` 运行 19 项开关联动与隔离检查，并导出真实窗口的浅色、深色、各分组及失联截图，随后自动退出。也可运行 `scripts/check_preview.sh /绝对路径/BLEUnlock.app /绝对路径/预览目录` 自动核对全部截图。
+演示模式使用独立临时偏好，不创建蓝牙管理器、不访问登录密码、不注册登录项，也不会执行锁屏、按键、通知、脚本或屏幕操作。可追加 `--capture /绝对路径/预览目录` 运行 19 项开关联动与隔离检查，并导出真实窗口的浅色、深色、各分组及失联截图，随后自动退出。也可运行 `scripts/check_preview.sh /绝对路径/AutoLock.app /绝对路径/预览目录` 自动核对全部截图。
 
 ## 发生错误后如何追溯和反馈
 
@@ -194,7 +194,7 @@ build/Build/Products/Release/BLEUnlock.app/Contents/MacOS/BLEUnlock --preview
 - 最近事件，以及轮转保留的近期运行记录。
 - 中文说明，便于带回 Codex 任务或交给维护者排查。
 
-包内不包含登录密码，不会自动上传。设备名称可能出现在事件中，分享前可先查看。请同时描述“做了什么、原本期待什么、实际发生什么、发生时间”，诊断中的源码提交可以在[本仓库](https://github.com/JahanHe/MacAutolock/commits/master)定位到对应版本，继续复现和修改。
+包内不包含登录密码，不会自动上传。设备名称可能出现在事件中，分享前可先查看。请同时描述“做了什么、原本期待什么、实际发生什么、发生时间”，诊断中的源码提交可以在[本仓库](https://github.com/JahanHe/AutoLock/commits/master)定位到对应版本，继续复现和修改。
 
 本机日志目录为 `~/Library/Application Support/jp.sone.BLEUnlock/诊断/`。在窗口点击“清空本机记录”会清理这两份记录，后续继续记录。隔离演示模式不会读写真实运行日志。
 

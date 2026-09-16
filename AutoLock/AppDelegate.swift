@@ -44,7 +44,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     var lastActionError: String?
     let mainMenu = NSMenu()
     var monitorMenuItem : NSMenuItem?
-    let previewSuite = "local.macautolock.preview.\(UUID().uuidString)"
+    let previewSuite = "local.autolock.preview.\(UUID().uuidString)"
     lazy var prefs: UserDefaults = {
         // ponytail: 预览只使用独立临时设置，不读取或覆盖真实偏好与钥匙串。
         if isPreview { return UserDefaults(suiteName: previewSuite)! }
@@ -104,7 +104,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     func notifyUser(_ reason: String) {
         guard !isPreview, prefs.bool(forKey: "lockNotifications") else { return }
         let content = UNMutableNotificationContent()
-        content.title = "MacAutolock"
+        content.title = "AutoLock"
         content.subtitle = t(reason == "lost" ? "notification_lost_signal" : "notification_device_away")
         content.body = t("notification_locked")
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "proximity-lock", content: content, trigger: nil))
@@ -119,7 +119,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         DispatchQueue.main.async {
             if response.notification.request.identifier == "update" {
-                NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/MacAutolock/releases")!)
+                NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/AutoLock/releases")!)
             } else { self.showSettings() }
             completionHandler()
         }
@@ -429,7 +429,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         alert.messageText = msg
         alert.informativeText = info ?? ""
         alert.addButton(withTitle: t("ok"))
-        alert.window.title = "BLEUnlock"
+        alert.window.title = "AutoLock"
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
     }
@@ -441,15 +441,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         let query: [String: Any] = [
             String(kSecClass): kSecClassGenericPassword,
             String(kSecAttrAccount): NSUserName(),
-            String(kSecAttrService): Bundle.main.bundleIdentifier ?? "BLEUnlock",
-            String(kSecAttrLabel): "BLEUnlock",
+            String(kSecAttrService): Bundle.main.bundleIdentifier ?? "jp.sone.BLEUnlock",
+            String(kSecAttrLabel): "AutoLock",
             String(kSecValueData): pw,
         ]
         // 先更新已有条目，避免保存失败时删掉原来的密码。
         var lookup = query
         lookup.removeValue(forKey: String(kSecValueData))
         lookup.removeValue(forKey: String(kSecAttrLabel))
-        var status = SecItemUpdate(lookup as CFDictionary, [String(kSecValueData): pw] as CFDictionary)
+        var status = SecItemUpdate(lookup as CFDictionary, [String(kSecValueData): pw, String(kSecAttrLabel): "AutoLock"] as CFDictionary)
         if status == errSecItemNotFound { status = SecItemAdd(query as CFDictionary, nil) }
         guard status == errSecSuccess else {
             errorModal(t("password_store_failed"), info: String(format: t("keychain_error"), status))
@@ -470,7 +470,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
             String(kSecUseAuthenticationContext): context,
             String(kSecClass): kSecClassGenericPassword,
             String(kSecAttrAccount): NSUserName(),
-            String(kSecAttrService): Bundle.main.bundleIdentifier ?? "BLEUnlock",
+            String(kSecAttrService): Bundle.main.bundleIdentifier ?? "jp.sone.BLEUnlock",
             String(kSecReturnData): kCFBooleanTrue!,
             String(kSecMatchLimit): kSecMatchLimitOne,
         ]
@@ -502,7 +502,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         msg.addButton(withTitle: t("cancel"))
         msg.messageText = t("enter_password")
         msg.informativeText = t("password_info")
-        msg.window.title = "BLEUnlock"
+        msg.window.title = "AutoLock"
 
         let txt = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 20))
         msg.accessoryView = txt

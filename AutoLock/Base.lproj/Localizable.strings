@@ -1,6 +1,6 @@
-"about" = "关于 BLEUnlock";
+"about" = "关于 AutoLock";
 "active_mode" = "主动模式";
-"bluetooth_power_warn" = "蓝牙已关闭。请打开蓝牙，以便 BLEUnlock 检测设备。";
+"bluetooth_power_warn" = "蓝牙已关闭。请打开蓝牙，以便 AutoLock 检测设备。";
 "cancel" = "取消";
 "closer" = "⬆ 更近（信号更强）";
 "device" = "设备列表";
@@ -18,7 +18,7 @@
 "minutes" = "分钟";
 "not_detected" = "未检测到设备信号";
 "notification_device_away" = "设备已远离";
-"notification_locked" = "BLEUnlock 已锁定这台 Mac";
+"notification_locked" = "AutoLock 已锁定这台 Mac";
 "notification_lost_signal" = "设备信号已丢失";
 "notification_update_available" = "发现新版本，点击查看下载页面。";
 "ok" = "确定";
@@ -30,7 +30,7 @@
 "password_decode_failed" = "无法读取已保存的密码，请重新设置登录密码。";
 "keychain_error" = "请检查钥匙串访问权限后重试。系统错误代码：%d。";
 "pause_now_playing" = "锁定时暂停音乐或视频";
-"quit" = "退出 BLEUnlock";
+"quit" = "退出 AutoLock";
 "scanning" = "正在扫描…";
 "seconds" = "秒";
 "set_password" = "设置登录密码…";

@@ -12,20 +12,22 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleDisplayName</key>
+	<string>AutoLock</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.13.0</string>
+	<string>1.13.1</string>
 	<key>CFBundleVersion</key>
-	<string>800</string>
+	<string>801</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>BLEUnlock 需要使用蓝牙检测所选设备是否在附近，以便自动锁定、解锁或唤醒屏幕。</string>
+	<string>AutoLock 需要使用蓝牙检测所选设备是否在附近，以便自动锁定、解锁或唤醒屏幕。</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>版权所有 © 2019-2022 Takeshi Sone。采用 MIT 许可证。</string>
 	<key>NSMainNibFile</key>

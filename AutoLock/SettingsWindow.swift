@@ -55,8 +55,8 @@ extension AppDelegate {
         icon.isTemplate = !showLight
         button.image = icon
         button.title = prefs.bool(forKey: "showStatusRSSI") ? (lastRSSI.map { " \($0)" } ?? " —") : ""
-        button.toolTip = "MacAutolock：\(value.title)\n\(value.detail)"
-        button.setAccessibilityLabel("MacAutolock，\(value.title)")
+        button.toolTip = "AutoLock：\(value.title)\n\(value.detail)"
+        button.setAccessibilityLabel("AutoLock，\(value.title)")
     }
 
     func statusColor(_ name: String) -> NSColor {
@@ -74,7 +74,7 @@ extension AppDelegate {
         if settingsWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1060, height: 780),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "MacAutolock · 设置与测试"
+            window.title = "AutoLock · 设置与测试"
             window.minSize = NSSize(width: 980, height: 690)
             window.isReleasedWhenClosed = false
             window.delegate = self
@@ -216,7 +216,7 @@ extension AppDelegate {
         context.interactionNotAllowed = true
         let query: [String: Any] = [String(kSecClass): kSecClassGenericPassword,
                                    String(kSecAttrAccount): NSUserName(),
-                                   String(kSecAttrService): Bundle.main.bundleIdentifier ?? "BLEUnlock",
+                                   String(kSecAttrService): Bundle.main.bundleIdentifier ?? "jp.sone.BLEUnlock",
                                    String(kSecReturnAttributes): true,
                                    String(kSecUseAuthenticationContext): context]
         hasPassword = SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
@@ -280,7 +280,7 @@ extension AppDelegate {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { allowed, _ in
                 if allowed {
                     let content = UNMutableNotificationContent()
-                    content.title = "MacAutolock · 测试通知"; content.body = "通知功能可用。这次测试没有锁定屏幕。"
+                    content.title = "AutoLock · 测试通知"; content.body = "通知功能可用。这次测试没有锁定屏幕。"
                     UNUserNotificationCenter.current().add(.init(identifier: "test", content: content, trigger: nil))
                 }
                 DispatchQueue.main.async {
@@ -353,7 +353,7 @@ extension AppDelegate {
         return count
     }
 
-    var sourceRevision: String { Bundle.main.object(forInfoDictionaryKey: "MacAutolockSourceRevision") as? String ?? "未记录（本地构建）" }
+    var sourceRevision: String { Bundle.main.object(forInfoDictionaryKey: "AutoLockSourceRevision") as? String ?? "未记录（本地构建）" }
     var buildDescription: String {
         "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "未知")（构建 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "未知")）"
     }
@@ -373,7 +373,7 @@ extension AppDelegate {
         panel.title = "导出诊断包"
         panel.message = "包含中文事件、系统版本、功能设置和源码版本，不包含密码；设备名称可能出现在事件中。文件不会自动上传。"
         panel.allowedContentTypes = [.zip]
-        panel.nameFieldStringValue = "MacAutolock-诊断.zip"
+        panel.nameFieldStringValue = "AutoLock-诊断.zip"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         var settings: [String: Any] = [:]
         for key in ["passiveMode", "wakeWithoutUnlocking", "watchCompatible", "wakeOnProximity", "sleepDisplay", "screensaver", "pauseItunes", "resumeMedia", "lockNotifications", "checkUpdates", "showSettingsOnLaunch", "showStatusLight", "showStatusIcon", "showStatusRSSI"] {
@@ -386,7 +386,7 @@ extension AppDelegate {
         settings["远离确认秒数"] = ble.proximityTimeout
         settings["失联超时秒数"] = ble.signalTimeout
         let summary: [String: Any] = ["应用版本": buildDescription, "源码提交": sourceRevision,
-            "源码仓库": "https://github.com/JahanHe/MacAutolock", "系统版本": ProcessInfo.processInfo.operatingSystemVersionString,
+            "源码仓库": "https://github.com/JahanHe/AutoLock", "系统版本": ProcessInfo.processInfo.operatingSystemVersionString,
             "监测状态": status.title, "采样方式": monitorModeDescription, "屏幕已锁定": screenLocked,
             "辅助功能权限": accessibilityGranted, "密码是否已保存": hasPassword,
             "最近操作错误": lastActionError ?? "暂无", "日志状态": diagnosticStatus, "功能设置": settings]
@@ -477,7 +477,7 @@ struct SettingsView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "lock.shield.fill").font(.system(size: 27)).foregroundStyle(.blue)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("MacAutolock").font(.headline)
+                        Text("AutoLock").font(.headline)
                         Text("蓝牙自动锁定").font(.caption).foregroundStyle(.secondary)
                     }
                 }.padding(.top, 20)
@@ -495,7 +495,7 @@ struct SettingsView: View {
                 Spacer()
                 Label(app.isPreview ? "演示预览" : "设置即时保存", systemImage: app.isPreview ? "eye" : "checkmark.circle")
                     .font(.caption).foregroundStyle(.secondary)
-                Text("版本 1.13.0 · 中文测试版").font(.caption2).foregroundStyle(.tertiary)
+                Text("版本 1.13.1 · 中文测试版").font(.caption2).foregroundStyle(.tertiary)
             }.padding(18).frame(width: 166).background(.regularMaterial)
             Divider()
             VStack(alignment: .leading, spacing: 0) {
@@ -624,7 +624,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("导出诊断包…") { app.exportDiagnostics() }
-                    Link("查看本版本源码", destination: URL(string: "https://github.com/JahanHe/MacAutolock/tree/\(app.sourceRevision.count == 40 ? app.sourceRevision : "master")")!)
+                    Link("查看本版本源码", destination: URL(string: "https://github.com/JahanHe/AutoLock/tree/\(app.sourceRevision.count == 40 ? app.sourceRevision : "master")")!)
                 }
             }
             card("事件记录", icon: "list.bullet.rectangle") {
@@ -824,7 +824,7 @@ struct SettingsView: View {
                 Spacer()
                 Image(systemName: previewSymbol).font(.system(size: 36, weight: .light))
                 Text(previewTitle).font(.headline).padding(.top, 10)
-                Text(app.previewScenario == 0 ? "欢迎回来" : "MacAutolock").font(.caption).opacity(0.65).padding(.top, 3)
+                Text(app.previewScenario == 0 ? "欢迎回来" : "AutoLock").font(.caption).opacity(0.65).padding(.top, 3)
                 Spacer()
             }.foregroundStyle(.white).frame(height: 196)
                 .background(LinearGradient(colors: [.init(red: 0.12, green: 0.22, blue: 0.34), .init(red: 0.18, green: 0.39, blue: 0.47)], startPoint: .topLeading, endPoint: .bottomTrailing))

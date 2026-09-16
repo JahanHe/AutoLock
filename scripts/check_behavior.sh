@@ -4,5 +4,5 @@ set -eu
 cd "$(dirname "$0")/.."
 check_dir=$(mktemp -d)
 trap 'rm -rf "$check_dir"' EXIT
-xcrun swiftc -swift-version 5 BLEUnlock/DiagnosticLog.swift BLEUnlock/ConnectionStatus.swift BLEUnlock/BLE.swift BLEUnlock/LEDeviceInfo.swift BLEUnlock/appleDeviceNames.swift Tests/main.swift -o "$check_dir/check"
+xcrun swiftc -swift-version 5 AutoLock/DiagnosticLog.swift AutoLock/ConnectionStatus.swift AutoLock/BLE.swift AutoLock/LEDeviceInfo.swift AutoLock/appleDeviceNames.swift Tests/main.swift -o "$check_dir/check"
 "$check_dir/check"

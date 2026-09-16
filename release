@@ -9,7 +9,7 @@ fi
 
 USERNAME=takeshi.sone@gmail.com
 TEAM=42LGPQYC7M
-APPNAME=BLEUnlock
+APPNAME=AutoLock
 
 BASEDIR=$(cd $(dirname $0); pwd)
 BUILDDIR=$BASEDIR/build

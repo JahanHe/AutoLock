@@ -6,11 +6,11 @@ class AboutBox: NSWindowController, NSWindowDelegate {
     @IBOutlet weak var versionLabel: NSTextField!
 
     @IBAction func visitHomepage(_ sender: Any) {
-        NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/MacAutolock#readme")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/AutoLock#readme")!)
     }
 
     @IBAction func checkReleases(_ sender: Any) {
-        NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/MacAutolock/releases")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/JahanHe/AutoLock/releases")!)
     }
     convenience init() {
         self.init(windowNibName: "AboutBox")

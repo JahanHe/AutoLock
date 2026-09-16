@@ -14,7 +14,7 @@ func checkUpdate() {
 }
 
 private func doCheckUpdate() {
-    var request = URLRequest(url: URL(string: "https://api.github.com/repos/JahanHe/MacAutolock/releases/latest")!)
+    var request = URLRequest(url: URL(string: "https://api.github.com/repos/JahanHe/AutoLock/releases/latest")!)
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
     let task = URLSession.shared.dataTask(with: request, completionHandler: { data, response, error in
         if let jsondata = data {
@@ -43,7 +43,7 @@ private func compareVersionsAndNotify(_ latestVersion: String) {
 
 private func notify() {
     let content = UNMutableNotificationContent()
-    content.title = "MacAutolock"
+    content.title = "AutoLock"
     content.subtitle = t("notification_update_available")
     UNUserNotificationCenter.current().add(.init(identifier: "update", content: content, trigger: nil))
 }

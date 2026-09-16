@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "3DD4B64F226C1C3200451B7B"
-               BuildableName = "BLEUnlock.app"
-               BlueprintName = "BLEUnlock"
-               ReferencedContainer = "container:BLEUnlock.xcodeproj">
+               BuildableName = "AutoLock.app"
+               BlueprintName = "AutoLock"
+               ReferencedContainer = "container:AutoLock.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,9 +45,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3DD4B64F226C1C3200451B7B"
-            BuildableName = "BLEUnlock.app"
-            BlueprintName = "BLEUnlock"
-            ReferencedContainer = "container:BLEUnlock.xcodeproj">
+            BuildableName = "AutoLock.app"
+            BlueprintName = "AutoLock"
+            ReferencedContainer = "container:AutoLock.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -62,9 +62,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3DD4B64F226C1C3200451B7B"
-            BuildableName = "BLEUnlock.app"
-            BlueprintName = "BLEUnlock"
-            ReferencedContainer = "container:BLEUnlock.xcodeproj">
+            BuildableName = "AutoLock.app"
+            BlueprintName = "AutoLock"
+            ReferencedContainer = "container:AutoLock.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -6,7 +6,7 @@
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
-        <customObject id="-2" userLabel="文件所有者" customClass="AboutBox" customModule="BLEUnlock" customModuleProvider="target">
+        <customObject id="-2" userLabel="文件所有者" customClass="AboutBox" customModule="AutoLock" customModuleProvider="target">
             <connections>
                 <outlet property="versionLabel" destination="V2H-IE-JRz" id="om4-J8-srj"/>
                 <outlet property="window" destination="hgX-Z1-8qq" id="XFJ-Mo-xbW"/>
@@ -14,7 +14,7 @@
         </customObject>
         <customObject id="-1" userLabel="第一响应者" customClass="FirstResponder"/>
         <customObject id="-3" userLabel="应用程序" customClass="NSObject"/>
-        <window title="关于 BLEUnlock" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" frameAutosaveName="" animationBehavior="default" id="hgX-Z1-8qq">
+        <window title="关于 AutoLock" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" frameAutosaveName="" animationBehavior="default" id="hgX-Z1-8qq">
             <windowStyleMask key="styleMask" titled="YES" closable="YES"/>
             <rect key="contentRect" x="196" y="240" width="500" height="450"/>
             <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1415"/>
@@ -28,7 +28,7 @@
                     </imageView>
                     <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" textCompletion="NO" translatesAutoresizingMaskIntoConstraints="NO" id="V2H-IE-JRz">
                         <rect key="frame" x="153" y="278" width="195" height="16"/>
-                        <textFieldCell key="cell" lineBreakMode="clipping" allowsUndo="NO" title="BLEUnlock 版本 #{version}" id="VLW-23-BX0">
+                        <textFieldCell key="cell" lineBreakMode="clipping" allowsUndo="NO" title="AutoLock 版本 #{version}" id="VLW-23-BX0">
                             <font key="font" metaFont="systemBold"/>
                             <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
                             <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>

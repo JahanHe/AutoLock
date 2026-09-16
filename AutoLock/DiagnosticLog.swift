@@ -26,7 +26,7 @@ final class DiagnosticLog {
         }
         if !manager.fileExists(atPath: current.path) {
             guard manager.createFile(atPath: current.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
-                throw NSError(domain: "MacAutolock", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法创建诊断日志文件"])
+                throw NSError(domain: "AutoLock", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法创建诊断日志文件"])
             }
         }
         let handle = try FileHandle(forWritingTo: current)
@@ -57,7 +57,7 @@ final class DiagnosticLog {
 
     func export(to destination: URL, summary: [String: Any], events: [RuntimeEvent]) throws {
         let manager = FileManager.default
-        let staging = manager.temporaryDirectory.appendingPathComponent("MacAutolock-诊断-\(UUID().uuidString)")
+        let staging = manager.temporaryDirectory.appendingPathComponent("AutoLock-诊断-\(UUID().uuidString)")
         try manager.createDirectory(at: staging, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         defer { try? manager.removeItem(at: staging) }
         let data = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
@@ -67,7 +67,7 @@ final class DiagnosticLog {
         for file in [previous, current] where manager.fileExists(atPath: file.path) {
             try manager.copyItem(at: file, to: staging.appendingPathComponent(file.lastPathComponent))
         }
-        let explanation = "这是 MacAutolock 本地诊断包，包含版本、系统、功能设置和运行记录，不包含登录密码。设备名称可能出现在事件中。你可以把本包交给维护者或带回 Codex 任务，结合记录中的源码版本继续排查。文件不会自动上传。\n"
+        let explanation = "这是 AutoLock 本地诊断包，包含版本、系统、功能设置和运行记录，不包含登录密码。设备名称可能出现在事件中。你可以把本包交给维护者或带回 Codex 任务，结合记录中的源码版本继续排查。文件不会自动上传。\n"
         try explanation.write(to: staging.appendingPathComponent("请先阅读.txt"), atomically: true, encoding: .utf8)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
@@ -77,7 +77,7 @@ final class DiagnosticLog {
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw NSError(domain: "MacAutolock", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "诊断包压缩失败，请检查保存位置是否可写"])
+            throw NSError(domain: "AutoLock", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "诊断包压缩失败，请检查保存位置是否可写"])
         }
     }
 }
