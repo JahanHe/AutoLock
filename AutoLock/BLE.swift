@@ -112,6 +112,8 @@ protocol BLEDelegate {
     func removeDevice(device: Device)
     func updateRSSI(rssi: Int?, active: Bool)
     func updatePresence(presence: Bool, reason: String)
+    func reachedWakeRange()
+    func signalLossChanged()
     func bluetoothStateChanged(_ state: CBManagerState)
     func monitorEvent(_ message: String)
     func bluetoothPowerWarn()
@@ -124,17 +126,32 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     var devices : [UUID : Device] = [:]
     var delegate: BLEDelegate?
     var scanMode = false
+    var scanAdvertisementCount = 0
+    var scanSeenDevices = Set<UUID>()
+    var scanFilteredDevices = Set<UUID>()
     var monitoredUUID: UUID?
     var monitoredPeripheral: CBPeripheral?
     var proximityTimer : Timer?
     var signalTimer: Timer?
+    var signalLossTimer: Timer?
+    var signalLossID: UUID?
+    var signalLossBeganAt: Date?
+    var signalLossIgnored = false
+    var lockOnSignalLoss = true
+    var signalLossLockDelay = 15.0
     var presence = false
     var lockRSSI = -80
     var unlockRSSI = -60
+    var wakeRSSI = -90
+    var withinWakeRange = false
+    var canUnlockAtCurrentSignal: Bool {
+        unlockRSSI != UNLOCK_DISABLED && lastRawRSSI.map { ConnectionStatus.validRSSI($0) && $0 >= unlockRSSI } == true
+    }
     var proximityTimeout = 5.0
     var signalTimeout = 60.0
     var lastReadAt = 0.0
     var lastRawRSSI: Int?
+    var lastSampleAt: Date?
     var powerWarn = true
     var passiveMode = false
     var thresholdRSSI = -70
@@ -149,12 +166,27 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func startScanning() {
+        for device in devices.values { device.scanTimer?.invalidate() }
+        devices = devices.filter { $0.key == monitoredUUID }
+        scanAdvertisementCount = 0
+        scanSeenDevices.removeAll()
+        scanFilteredDevices.removeAll()
         scanMode = true
+        // 用户点重新扫描时重建扫描请求，避免一直复用没有返回广播的旧请求。
+        centralMgr?.stopScan()
         scanForPeripherals()
+        delegate?.monitorEvent("设备扫描开始：门槛 \(thresholdRSSI) dBm；系统扫描状态：\(centralMgr?.isScanning == true ? "已开启" : "未开启")。")
     }
 
     func stopScanning() {
         scanMode = false
+        // 扫描结果保留到下一次扫描；列表清理不能妨碍用户选择，也不能取消监测设备的计时。
+        for device in devices.values {
+            device.scanTimer?.invalidate()
+            if let peripheral = device.peripheral, peripheral != monitoredPeripheral {
+                centralMgr?.cancelPeripheralConnection(peripheral)
+            }
+        }
         if activeModeTimer != nil {
             centralMgr?.stopScan()
         }
@@ -174,11 +206,14 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func startMonitor(uuid: UUID) {
+        clearSignalLoss()
         if let p = monitoredPeripheral {
             centralMgr.cancelPeripheralConnection(p)
         }
         monitoredUUID = uuid
         lastRawRSSI = nil
+        lastSampleAt = nil
+        withinWakeRange = false
         delegate?.monitorEvent("已开始监测设备，等待有效信号；失联锁定计时已启用。")
         proximityTimer?.invalidate()
         resetSignalTimer()
@@ -204,6 +239,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func rearmAfterUnlock() {
         guard monitoredUUID != nil else { return }
+        if !signalLossIgnored { clearSignalLoss(); delegate?.signalLossChanged() }
         presence = true
         latestRSSIs.removeAll()
         proximityTimer?.invalidate()
@@ -213,16 +249,54 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func signalLost() {
+        guard signalLossID == nil else { return }
+        signalLossID = UUID()
+        signalLossBeganAt = Date()
         print("设备信号已丢失")
         lastRawRSSI = nil
+        withinWakeRange = false
         delegate?.monitorEvent("连续 \(Int(signalTimeout)) 秒没有有效信号，已触发失联判断。")
         proximityTimer?.invalidate()
         proximityTimer = nil
         latestRSSIs.removeAll()
         delegate?.updateRSSI(rssi: nil, active: false)
         presence = false
-        // 即使之前已经远离，重新解锁后的失联计时也必须能够再次锁定。
-        delegate?.updatePresence(presence: false, reason: "lost")
+        configureSignalLossLock()
+        delegate?.signalLossChanged()
+    }
+
+    func configureSignalLossLock() {
+        signalLossTimer?.invalidate()
+        signalLossTimer = nil
+        guard let started = signalLossBeganAt, lockOnSignalLoss, !signalLossIgnored,
+              lockRSSI != LOCK_DISABLED else { return }
+        let episode = signalLossID
+        let remaining = max(0.1, started.addingTimeInterval(signalLossLockDelay).timeIntervalSinceNow)
+        signalLossTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
+            guard let self = self, self.signalLossID == episode, self.lockOnSignalLoss,
+                  !self.signalLossIgnored, self.lockRSSI != self.LOCK_DISABLED else { return }
+            self.signalLossTimer = nil
+            self.delegate?.monitorEvent("断连宽限时间已到，按当前设置请求锁定。")
+            self.delegate?.updatePresence(presence: false, reason: "lost")
+        }
+        RunLoop.main.add(signalLossTimer!, forMode: .common)
+    }
+
+    func ignoreCurrentSignalLoss() {
+        guard signalLossID != nil else { return }
+        signalLossIgnored = true
+        signalLossTimer?.invalidate()
+        signalLossTimer = nil
+        delegate?.monitorEvent("用户取消本次断连锁定；恢复有效信号后自动恢复保护，不改变远离锁定设置。")
+        delegate?.signalLossChanged()
+    }
+
+    func clearSignalLoss() {
+        signalLossTimer?.invalidate()
+        signalLossTimer = nil
+        signalLossID = nil
+        signalLossBeganAt = nil
+        signalLossIgnored = false
     }
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -258,9 +332,20 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func updateMonitoredPeripheral(_ rssi: Int) {
         guard monitoredUUID != nil, ConnectionStatus.validRSSI(rssi) else { return }
+        lastSampleAt = Date()
+        let recovered = signalLossID != nil
+        if recovered {
+            clearSignalLoss()
+            // 恢复弱信号也要重新判断远离，不能被“本次不锁定”永久停用。
+            presence = true
+            delegate?.monitorEvent("有效信号已恢复，取消断连倒计时并恢复距离保护。")
+            delegate?.signalLossChanged()
+        }
         lastRawRSSI = rssi
+        let enteredWakeRange = rssi >= wakeRSSI && !withinWakeRange
+        withinWakeRange = rssi >= wakeRSSI
         let returnThreshold = unlockRSSI == UNLOCK_DISABLED ? -60 : unlockRSSI
-        let cameBack = rssi >= returnThreshold && !presence
+        let cameBack = rssi >= returnThreshold && (!presence || recovered)
         if cameBack { latestRSSIs.removeAll() }
         let estimatedRSSI = getEstimatedRSSI(rssi: rssi)
         // 先发布有效信号，再通知靠近，保证解锁门槛读取的是本次采样。
@@ -270,6 +355,9 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             delegate?.monitorEvent("信号达到靠近门槛 \(returnThreshold) dBm，判定设备已返回。")
             presence = true
             delegate?.updatePresence(presence: true, reason: "close")
+        } else if enteredWakeRange && (!presence || recovered) {
+            // 只报告重新进入亮屏范围，不改变远离状态，也不提前满足密码解锁条件。
+            delegate?.reachedWakeRange()
         }
         let departureThreshold = lockRSSI == LOCK_DISABLED ? -80 : lockRSSI
         if estimatedRSSI >= departureThreshold {
@@ -279,6 +367,11 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         } else if presence && proximityTimer == nil {
             proximityTimer = Timer.scheduledTimer(withTimeInterval: proximityTimeout, repeats: false) { [weak self] _ in
                 guard let self = self else { return }
+                self.proximityTimer = nil
+                guard let sample = self.lastSampleAt, Date().timeIntervalSince(sample) < min(3, self.signalTimeout) else {
+                    self.delegate?.monitorEvent("远离确认到期但没有持续的新采样，等待断连确认，不凭旧的弱信号立即锁定。")
+                    return
+                }
                 print("设备已远离")
                 self.delegate?.monitorEvent("信号持续低于远离门槛，远离确认计时已到。")
                 self.presence = false
@@ -295,6 +388,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func resetScanTimer(device: Device) {
         device.scanTimer?.invalidate()
         device.scanTimer = Timer.scheduledTimer(withTimeInterval: signalTimeout, repeats: false, block: { _ in
+            guard self.devices[device.uuid] === device else { return }
             self.delegate?.removeDevice(device: device)
             if let p = device.peripheral {
                 self.centralMgr.cancelPeripheralConnection(p)
@@ -334,6 +428,13 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                         rssi RSSI: NSNumber)
     {
         let rssi = RSSI.intValue
+        if scanMode {
+            scanAdvertisementCount += 1
+            scanSeenDevices.insert(peripheral.identifier)
+            if !ConnectionStatus.validRSSI(rssi) || rssi < thresholdRSSI {
+                scanFilteredDevices.insert(peripheral.identifier)
+            } else { scanFilteredDevices.remove(peripheral.identifier) }
+        }
         guard ConnectionStatus.validRSSI(rssi) else { return }
         if let uuid = monitoredUUID {
             if peripheral.identifier.description == uuid.description {
@@ -360,6 +461,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             let dev = devices[peripheral.identifier]
             var device: Device
             if (dev == nil) {
+                guard rssi >= thresholdRSSI else { return }
                 device = Device(uuid: peripheral.identifier)
                 if (rssi >= thresholdRSSI) {
                     device.peripheral = peripheral

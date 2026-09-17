@@ -17,7 +17,7 @@ struct ConnectionStatus {
             case .resetting: reason = "蓝牙正在恢复"
             default: reason = "正在等待蓝牙就绪"
             }
-            return .init(healthy: false, title: reason, detail: "无法接收设备信号；已开启自动锁定时，信号丢失达到设定时间后仍会锁定。")
+            return .init(healthy: false, title: reason, detail: "无法接收设备信号；请检查连接，断连后是否锁定由设置决定。")
         }
         guard let rssi = rssi, validRSSI(rssi), let age = age, age >= 0, age < timeout else {
             return .init(healthy: false, title: "未收到有效信号", detail: "设备可能已离开或停止广播。异常灯色表示监测异常，不代表屏幕已经锁定。")
@@ -26,6 +26,16 @@ struct ConnectionStatus {
     }
 
     static func validRSSI(_ value: Int) -> Bool { (-127 ... -1).contains(value) }
+
+    static func shouldKeepDisplayAwake(enabled: Bool, healthy: Bool, present: Bool,
+                                       raw: Int?, average: Int?, threshold: Int, age: TimeInterval?,
+                                       manualLock: Bool, systemSleep: Bool, displaySleep: Bool) -> Bool {
+        guard enabled, healthy, present, !manualLock, !systemSleep, !displaySleep,
+              let raw = raw, validRSSI(raw), raw >= threshold,
+              let average = average, validRSSI(average), average >= threshold,
+              let age = age, age >= 0, age < 6 else { return false }
+        return true
+    }
 }
 
 struct ReturnPolicy {

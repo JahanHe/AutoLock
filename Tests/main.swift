@@ -8,6 +8,10 @@ final class Recorder: BLEDelegate {
     var messages: [String] = []
     func monitorEvent(_ message: String) { messages.append(message) }
     var states: [CBManagerState] = []
+    var lossChanges = 0
+    func signalLossChanged() { lossChanges += 1 }
+    var wakes = 0
+    func reachedWakeRange() { wakes += 1 }
     func newDevice(device: Device) {}
     func updateDevice(device: Device) {}
     func removeDevice(device: Device) {}
@@ -30,7 +34,20 @@ func makeBLE() -> (BLE, Recorder) {
     ble.startMonitor(uuid: UUID())
     return (ble, recorder)
 }
-func clean(_ ble: BLE) { ble.signalTimer?.invalidate(); ble.proximityTimer?.invalidate() }
+func clean(_ ble: BLE) { ble.signalTimer?.invalidate(); ble.proximityTimer?.invalidate(); ble.signalLossTimer?.invalidate() }
+
+do {
+    let (ble, _) = makeBLE(); defer { clean(ble) }
+    let device = Device(uuid: UUID())
+    ble.devices[device.uuid] = device
+    ble.resetScanTimer(device: device)
+    let expiry = device.scanTimer!
+    let lockDeadline = ble.signalTimer!.fireDate
+    ble.stopScanning()
+    check(!expiry.isValid, "扫描结束必须停止清理列表，给用户保留选择设备的时间")
+    check(ble.devices[device.uuid] === device, "扫描结束必须保留已发现的设备")
+    check(ble.signalTimer!.fireDate == lockDeadline, "停止扫描不得延后已选设备的失联锁定")
+}
 
 check(!ConnectionStatus.evaluate(selected: false, bluetooth: .poweredOn, rssi: -50, age: 0, timeout: 30).healthy, "未选设备必须红灯")
 for state: CBManagerState in [.poweredOff, .unauthorized, .unsupported, .resetting, .unknown] {
@@ -78,11 +95,14 @@ do {
     ble.handleBluetoothState(.poweredOff)
     check(ble.signalTimer!.fireDate == deadline, "关闭蓝牙不得延后失联截止时间")
     ble.signalTimer?.fire()
+    check(recorder.events.isEmpty && recorder.lossChanges == 1, "断连必须先提醒，不能立即锁定")
+    ble.signalLossTimer?.fire()
     check(recorder.events.contains { !$0.0 && $0.1 == "lost" }, "关闭蓝牙不得取消原有失联锁定")
     check(recorder.states.last == .poweredOff, "灯色必须知道蓝牙已关闭")
     check(recorder.readings.last! == nil, "超时必须清除旧信号")
-    ble.resetSignalTimer()
+    ble.rearmAfterUnlock()
     ble.signalTimer?.fire()
+    ble.signalLossTimer?.fire()
     check(recorder.events.count == 2, "失联状态手动解锁后重新计时仍必须能再次锁定")
 }
 do {
@@ -120,6 +140,121 @@ do {
 }
 
 // 使用临时目录验证退出后读取、轮转、导出与清空，不碰用户的实际诊断日志。
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-100)
+    ble.proximityTimer?.fire()
+    check(!ble.presence && recorder.wakes == 0, "在亮屏范围以外仍应远离锁定")
+    ble.updateMonitoredPeripheral(-90)
+    check(recorder.wakes == 1, "返回达到 -90 dBm 必须报告亮屏阶段")
+    check(!ble.presence && !ble.canUnlockAtCurrentSignal, "亮屏阶段不能提前满足解锁")
+    ble.updateMonitoredPeripheral(-75)
+    check(recorder.wakes == 1 && !ble.canUnlockAtCurrentSignal, "继续靠近但未到 -60 时不能重复亮屏或解锁")
+    ble.updateMonitoredPeripheral(-60)
+    check(ble.presence && ble.canUnlockAtCurrentSignal, "更近达到 -60 dBm 才满足密码解锁距离")
+    ble.updateMonitoredPeripheral(-70)
+    check(ble.presence && !ble.canUnlockAtCurrentSignal, "已经进入过近处，也不能凭旧状态在距离变远后输入密码")
+}
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-85)
+    ble.proximityTimer?.fire()
+    for _ in 0..<5 { ble.updateMonitoredPeripheral(-85) }
+    check(!ble.presence && recorder.wakes == 0, "持续停在远离区间不能刚锁定就被亮屏循环打断")
+    ble.signalLost()
+    check(!ble.withinWakeRange && !ble.canUnlockAtCurrentSignal, "失联必须清除亮屏范围和解锁距离")
+    ble.updateMonitoredPeripheral(-85)
+    check(recorder.wakes == 1 && !ble.canUnlockAtCurrentSignal, "失联后恢复弱信号只能进入亮屏阶段")
+    ble.updateMonitoredPeripheral(-100)
+    ble.proximityTimer?.fire()
+    for invalid in [0, 127, -128] { ble.updateMonitoredPeripheral(invalid) }
+    check(!ble.withinWakeRange && recorder.wakes == 1, "无效信号不能触发亮屏阶段")
+    ble.updateMonitoredPeripheral(-90)
+    check(recorder.wakes == 2, "真正离开亮屏范围再回来可以再次触发")
+    ble.unlockRSSI = ble.UNLOCK_DISABLED
+    ble.updateMonitoredPeripheral(-50)
+    check(!ble.canUnlockAtCurrentSignal, "关闭靠近动作后强信号也不能允许密码解锁")
+}
+
+
+// 断连的通知、宽限、取消和恢复由真实 BLE 状态机处理，不发送系统锁屏请求。
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-50)
+    ble.signalLost()
+    check(recorder.events.isEmpty && ble.signalLossTimer != nil, "突然断连先进入宽限，不立即锁定")
+    check(abs(ble.signalLossTimer!.fireDate.timeIntervalSinceNow - 15) < 1, "默认保留 15 秒供用户取消")
+    let episode = ble.signalLossID
+    ble.signalLost()
+    check(recorder.lossChanges == 1 && ble.signalLossID == episode, "同一次失联只提醒一次")
+    let pending = ble.signalLossTimer!
+    ble.ignoreCurrentSignalLoss()
+    pending.fire()
+    check(ble.signalLossIgnored && !pending.isValid && recorder.events.isEmpty, "通知内本次不锁定必须取消真实定时器")
+    ble.rearmAfterUnlock(); ble.signalLost()
+    check(ble.signalLossIgnored && ble.signalLossTimer == nil, "未恢复信号前手动解锁也不能重新启动已取消的本次锁定")
+    for rssi in [0, 127, -128] { ble.updateMonitoredPeripheral(rssi) }
+    check(ble.signalLossID == episode && ble.signalLossIgnored, "无效信号不能撤销本次豁免或误称恢复")
+    ble.updateMonitoredPeripheral(-50)
+    check(ble.signalLossID == nil && !ble.signalLossIgnored, "有效信号恢复后取消本次豁免并恢复保护")
+    ble.signalLost(); ble.signalLossTimer?.fire()
+    check(recorder.events.last?.1 == "lost", "下一次断连恢复默认锁定保护")
+}
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.lockOnSignalLoss = false
+    ble.updateMonitoredPeripheral(-50); ble.signalLost()
+    check(ble.signalLossTimer == nil && recorder.events.isEmpty && recorder.lossChanges == 1, "不因断连锁定时仍显示提醒")
+    ble.updateMonitoredPeripheral(-90); ble.proximityTimer?.fire()
+    check(recorder.events.last?.1 == "away", "关闭断连锁定不影响恢复弱信号后的远离锁定")
+}
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-50); ble.signalLost()
+    let pending = ble.signalLossTimer!
+    ble.updateMonitoredPeripheral(-85)
+    check(!pending.isValid && ble.signalLossID == nil, "恢复任意有效信号都取消旧断连倒计时")
+    ble.proximityTimer?.fire()
+    check(recorder.events.last?.1 == "away", "恢复信号偏弱时重新按远离规则锁定")
+    ble.signalLost(); let old = ble.signalLossTimer!
+    ble.startMonitor(uuid: UUID())
+    old.fire()
+    check(!old.isValid && ble.signalLossID == nil, "换设备不能被旧设备的断连倒计时锁定")
+}
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-50); ble.signalLost()
+    ble.lockOnSignalLoss = false; ble.configureSignalLossLock()
+    check(ble.signalLossTimer == nil, "设置关闭断连锁定应立即取消倒计时")
+    ble.lockOnSignalLoss = true; ble.signalLossLockDelay = 30; ble.configureSignalLossLock()
+    check(abs(ble.signalLossTimer!.fireDate.timeIntervalSinceNow - 30) < 1, "修改宽限按原断连时间计算")
+    ble.lockRSSI = ble.LOCK_DISABLED; ble.configureSignalLossLock()
+    check(ble.signalLossTimer == nil && recorder.events.isEmpty, "关闭自动锁定应取消断连计时")
+}
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-90)
+    ble.lastSampleAt = Date().addingTimeInterval(-5)
+    ble.proximityTimer?.fire()
+    check(recorder.events.isEmpty && ble.presence, "弱信号后突然中断，不可凭旧采样触发远离锁定")
+    ble.signalLost()
+    check(recorder.events.isEmpty && ble.signalLossTimer != nil, "旧弱信号转失联后先提醒和宽限")
+}
+func keepAwake(enabled: Bool = true, healthy: Bool = true, present: Bool = true, raw: Int? = -50,
+               average: Int? = -50, age: TimeInterval? = 1, manual: Bool = false,
+               sleeping: Bool = false, displaySleep: Bool = false) -> Bool {
+    ConnectionStatus.shouldKeepDisplayAwake(enabled: enabled, healthy: healthy, present: present,
+        raw: raw, average: average, threshold: -80, age: age, manualLock: manual,
+        systemSleep: sleeping, displaySleep: displaySleep)
+}
+check(keepAwake(), "连续收到附近信号允许防止空闲关屏")
+for value in [keepAwake(enabled: false), keepAwake(healthy: false), keepAwake(present: false),
+              keepAwake(raw: nil), keepAwake(raw: 127), keepAwake(raw: -90), keepAwake(average: -90),
+              keepAwake(age: nil), keepAwake(age: -1), keepAwake(age: 6), keepAwake(manual: true),
+              keepAwake(sleeping: true), keepAwake(displaySleep: true)] {
+    check(!value, "关闭、离开、断连、锁定或主动休眠时必须释放保持亮屏")
+}
+
 do {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("AutoLock-日志检查-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: directory) }
