@@ -647,6 +647,36 @@ extension AppDelegate {
         refreshStatus()
     }
 
+    private func capturePreviewWindow(to path: URL, composited: Bool) -> [CGFloat]? {
+        precondition(isPreview)
+        guard let window = settingsWindow else { return nil }
+        if !composited {
+            guard let view = window.contentView?.superview,
+                  let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try? bitmap.representation(using: .png, properties: [:])?.write(to: path)
+            return nil
+        }
+        window.orderFrontRegardless()
+        let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]]
+        let info = windows?.first { ($0[kCGWindowNumber as String] as? Int) == window.windowNumber }
+        guard let bounds = info?[kCGWindowBounds as String] as? [String: NSNumber],
+              let x = bounds["X"], let y = bounds["Y"], let width = bounds["Width"], let height = bounds["Height"],
+              width.intValue > 0, height.intValue > 0 else { preconditionFailure("无法获取测试窗口区域") }
+        let capture = Process()
+        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        let region = "\(x.intValue),\(y.intValue),\(width.intValue),\(height.intValue)"
+        capture.arguments = ["-x", "-R", region, path.path]
+        print("正在合成截图：\(path.lastPathComponent)，区域 \(region)")
+        fflush(stdout)
+        do { try capture.run(); capture.waitUntilExit() }
+        catch { preconditionFailure("窗口合成截图失败：\(error)") }
+        precondition(capture.terminationStatus == 0, "窗口合成截图失败，请确认屏幕已解锁和截图权限")
+        guard let data = try? Data(contentsOf: path), let bitmap = NSBitmapImageRep(data: data),
+              let color = bitmap.colorAt(x: bitmap.pixelsWide * 3 / 4, y: 24)?.usingColorSpace(.deviceRGB) else { return nil }
+        return [color.redComponent, color.greenComponent, color.blueComponent]
+    }
+
     func configurePreviewCapture() {
         guard isPreview else { return }
         let args = ProcessInfo.processInfo.arguments
@@ -718,28 +748,7 @@ extension AppDelegate {
                 self.refreshStatus()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     let path = directory.appendingPathComponent("设置窗口-\(name).png")
-                    if composited, let window = self.settingsWindow {
-                        let capture = Process()
-                        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-                        window.orderFrontRegardless()
-                        let info = (CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]])?.first { ($0[kCGWindowNumber as String] as? Int) == window.windowNumber }
-                        guard let bounds = info?[kCGWindowBounds as String] as? [String: NSNumber],
-                              let x = bounds["X"], let y = bounds["Y"], let width = bounds["Width"], let height = bounds["Height"], width.intValue > 0, height.intValue > 0 else { preconditionFailure("无法获取测试窗口区域") }
-                        capture.arguments = ["-x", "-R", "\(x.intValue),\(y.intValue),\(width.intValue),\(height.intValue)", path.path]
-                        print("正在合成截图：\(name)，区域 \(capture.arguments![2])")
-                        fflush(stdout)
-                        do { try capture.run(); capture.waitUntilExit() }
-                        catch { preconditionFailure("窗口合成截图失败：\(error)") }
-                        precondition(capture.terminationStatus == 0, "窗口合成截图失败，请检查屏幕录制权限")
-                        if let image = NSBitmapImageRep(contentsOf: path), let color = image.colorAt(x: image.pixelsWide * 3 / 4, y: 24)?.usingColorSpace(.deviceRGB) {
-                            glassColors[name] = [color.redComponent, color.greenComponent, color.blueComponent]
-                        }
-                    } else {
-                        guard let view = self.settingsWindow?.contentView?.superview,
-                              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
-                        view.cacheDisplay(in: view.bounds, to: bitmap)
-                        try? bitmap.representation(using: .png, properties: [:])?.write(to: path)
-                    }
+                    if let color = self.capturePreviewWindow(to: path, composited: composited) { glassColors[name] = color }
                     if name == "靠近与解锁" {
                         let result = ["目标分组": page.rawValue, "当前分组": self.settingsPage.rawValue]
                         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
