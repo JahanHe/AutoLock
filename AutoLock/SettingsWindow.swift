@@ -711,7 +711,11 @@ extension AppDelegate {
         backdrop?.backgroundColor = .systemBlue
         backdrop?.ignoresMouseEvents = true
         let checks = verifyPreviewSettings()
-        if composited { settingsWindow?.level = .floating; backdrop?.level = .floating }
+        if composited {
+            settingsWindow?.level = .floating
+            settingsWindow?.ignoresMouseEvents = true
+            backdrop?.level = .floating
+        }
         let report: [String: Any] = ["设置检查通过": checks, "隔离预览": isPreview,
                                     "系统版本": ProcessInfo.processInfo.operatingSystemVersionString]
         if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
@@ -822,6 +826,7 @@ struct SettingsView: View {
                         }
                     } .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .clipped()
                 .coordinateSpace(name: "settings-scroll")
                 .onPreferenceChange(SettingsPositionKey.self) { positions in
                     let visible = positions.filter { $0.value <= 20 }.max { $0.value < $1.value }?.key ?? .overview
@@ -829,8 +834,13 @@ struct SettingsView: View {
                 }
                 .onChange(of: app.settingsScrollRequest) { _ in
                     let target = app.settingsScrollTarget
-                    // 先完成折叠内容的布局，再定位；避免滚动动画被实时状态更新打断。
-                    DispatchQueue.main.async { proxy.scrollTo(target, anchor: .top) }
+                    let request = app.settingsScrollRequest
+                    // 折叠内容需完成下一轮布局再定位；新请求到来时丢弃旧跳转。
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        guard app.settingsScrollRequest == request else { return }
+                        app.settingsWindow?.contentView?.layoutSubtreeIfNeeded()
+                        proxy.scrollTo(target, anchor: .top)
+                    }
                 }
                 }
             }.frame(minWidth: 452)
