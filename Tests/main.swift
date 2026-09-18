@@ -21,8 +21,9 @@ final class Recorder: BLEDelegate {
     func bluetoothStateChanged(_ state: CBManagerState) { states.append(state) }
 }
 var checks = 0
+var failures: [String] = []
 func check(_ value: Bool, _ message: String) {
-    precondition(value, message)
+    if !value { failures.append(message) }
     checks += 1
 }
 func makeBLE() -> (BLE, Recorder) {
@@ -103,7 +104,7 @@ do {
     ble.rearmAfterUnlock()
     ble.signalTimer?.fire()
     ble.signalLossTimer?.fire()
-    check(recorder.events.count == 2, "失联状态手动解锁后重新计时仍必须能再次锁定")
+    check(recorder.events.count == 1, "失联时手动解锁后，在设备回来前不能再次锁定")
 }
 do {
     let (ble, recorder) = makeBLE(); defer { clean(ble) }
@@ -139,6 +140,74 @@ do {
     check(recorder.events.filter { $0.1 == "away" }.count == 2, "远处仍在广播时手动解锁，重新判断后仍必须锁定")
 }
 
+// 手动解锁豁免仅等到下一次所选设备的有效采样；蓝牙重启或无效值不能结束豁免。
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-50)
+    ble.signalLost()
+    let pending = ble.signalLossTimer!
+    ble.rearmAfterUnlock()
+    check(ble.waitingForDeviceAfterUnlock && !pending.isValid, "手动解锁必须立即撤销待执行的断连锁定")
+    ble.signalLost(); ble.configureSignalLossLock(); pending.fire()
+    ble.handleBluetoothState(.poweredOff); ble.handleBluetoothState(.poweredOn)
+    for rssi in [0, 127, -128] { ble.updateMonitoredPeripheral(rssi) }
+    ble.signalTimer?.fire(); ble.signalLossTimer?.fire()
+    check(ble.waitingForDeviceAfterUnlock && recorder.events.isEmpty, "无设备期间不再锁定，重启蓝牙或无效采样均不解除暂停")
+    ble.updateMonitoredPeripheral(-90)
+    check(!ble.waitingForDeviceAfterUnlock && ble.proximityTimer != nil, "恢复有效弱信号即恢复正常远离确认")
+    ble.proximityTimer?.fire()
+    check(recorder.events.last?.1 == "away", "恢复后持续远离仍然锁定")
+    ble.rearmAfterUnlock()
+    ble.setPauseAfterManualUnlock(false)
+    ble.signalTimer?.fire(); ble.signalLossTimer?.fire()
+    check(!ble.waitingForDeviceAfterUnlock && recorder.events.last?.1 == "lost", "关闭豁免开关可恢复原有失联保护")
+}
+do {
+    let (ble, _) = makeBLE(); defer { clean(ble) }
+    ble.rearmAfterUnlock()
+    check(ble.waitingForDeviceAfterUnlock, "启动尚无信号时的解锁同样应等待设备")
+    ble.startMonitor(uuid: UUID())
+    check(!ble.waitingForDeviceAfterUnlock, "主动更换监测设备应开启新的监测周期")
+    ble.updateMonitoredPeripheral(-50); ble.rearmAfterUnlock()
+    check(!ble.waitingForDeviceAfterUnlock, "设备在附近正常解锁不能暂停离开保护")
+    ble.lastSampleAt = Date().addingTimeInterval(-61); ble.rearmAfterUnlock()
+    check(ble.waitingForDeviceAfterUnlock, "过期的近处信号不能阻止解锁豁免")
+}
+
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-50)
+    let before = recorder.wakes
+    ble.displayDidSleep()
+    for rssi in [0, 127, -128] { ble.updateMonitoredPeripheral(rssi) }
+    check(recorder.wakes == before, "熄屏后无效采样不能触发亮屏")
+    ble.updateMonitoredPeripheral(-50)
+    check(recorder.wakes == before + 1, "熄屏后已经在附近的设备也能用新的近处采样触发亮屏")
+    for _ in 0..<5 { ble.updateMonitoredPeripheral(-50) }
+    check(recorder.wakes == before + 1, "同一熄屏周期内持续强信号只触发一次补偿亮屏")
+    ble.displayDidSleep(); ble.updateMonitoredPeripheral(-50)
+    check(recorder.wakes == before + 2, "下一次熄屏可重新等待新信号亮屏")
+}
+
+// 未彻底断联的返回也应亮屏，且不能要求先达到更近的密码门槛。
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-95)
+    ble.updateMonitoredPeripheral(-75)
+    check(recorder.wakes == 1, "远离确认尚未到期时返回亮屏范围，也必须报告亮屏")
+}
+do {
+    let (ble, recorder) = makeBLE(); defer { clean(ble) }
+    ble.updateMonitoredPeripheral(-85)
+    ble.proximityTimer?.fire()
+    let before = recorder.wakes
+    for _ in 0..<5 { ble.updateMonitoredPeripheral(-85) }
+    check(recorder.wakes == before, "持续弱信号不能在远离锁定后立即反复亮屏")
+    ble.updateMonitoredPeripheral(-75)
+    check(recorder.wakes == before + 1, "未离开 -90 亮屏范围，但已从远离区间返回时也应亮屏")
+    check(!ble.canUnlockAtCurrentSignal, "返回亮屏不能放宽密码解锁门槛")
+}
+
 // 使用临时目录验证退出后读取、轮转、导出与清空，不碰用户的实际诊断日志。
 do {
     let (ble, recorder) = makeBLE(); defer { clean(ble) }
@@ -160,17 +229,17 @@ do {
     ble.updateMonitoredPeripheral(-85)
     ble.proximityTimer?.fire()
     for _ in 0..<5 { ble.updateMonitoredPeripheral(-85) }
-    check(!ble.presence && recorder.wakes == 0, "持续停在远离区间不能刚锁定就被亮屏循环打断")
+    check(!ble.presence && recorder.wakes == 1, "首次进入可亮屏，但持续停在远离区间不能刚锁定就反复亮屏")
     ble.signalLost()
     check(!ble.withinWakeRange && !ble.canUnlockAtCurrentSignal, "失联必须清除亮屏范围和解锁距离")
     ble.updateMonitoredPeripheral(-85)
-    check(recorder.wakes == 1 && !ble.canUnlockAtCurrentSignal, "失联后恢复弱信号只能进入亮屏阶段")
+    check(recorder.wakes == 2 && !ble.canUnlockAtCurrentSignal, "失联后恢复弱信号只能进入亮屏阶段")
     ble.updateMonitoredPeripheral(-100)
     ble.proximityTimer?.fire()
     for invalid in [0, 127, -128] { ble.updateMonitoredPeripheral(invalid) }
-    check(!ble.withinWakeRange && recorder.wakes == 1, "无效信号不能触发亮屏阶段")
+    check(!ble.withinWakeRange && recorder.wakes == 2, "无效信号不能触发亮屏阶段")
     ble.updateMonitoredPeripheral(-90)
-    check(recorder.wakes == 2, "真正离开亮屏范围再回来可以再次触发")
+    check(recorder.wakes == 3, "真正离开亮屏范围再回来可以再次触发")
     ble.unlockRSSI = ble.UNLOCK_DISABLED
     ble.updateMonitoredPeripheral(-50)
     check(!ble.canUnlockAtCurrentSignal, "关闭靠近动作后强信号也不能允许密码解锁")
@@ -282,5 +351,9 @@ do {
         try DiagnosticLog(directory: blocked).append(.init(message: "不能写入"))
         preconditionFailure("日志错误不得静默吞掉")
     } catch { check(true, "日志写入失败会返回给界面显示") }
+}
+if !failures.isEmpty {
+    for message in failures { print("失败：\(message)") }
+    exit(1)
 }
 print("行为检查通过：\(checks) 项，涵盖灯色、离开锁定、断蓝牙、失联兜底、信号波动、Apple Watch 密码互斥及持久诊断日志。")

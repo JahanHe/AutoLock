@@ -71,6 +71,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     var nowPlayingWasPlaying = false
     var aboutBox: AboutBox? = nil
     var wakeTimer: Timer?
+    var lastWakeResult = "尚未请求亮屏"
     var manualLock = false
     var unlockedAt = 0.0
     var inScreensaver = false
@@ -88,8 +89,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     func refreshSystemScreenState() {
         guard !isPreview else { return }
         // 直接读取系统快照，避免启动时或错过通知后仍显示默认的亮屏／未锁定。
-        screenLocked = isScreenLocked()
-        displaySleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
+        let locked = isScreenLocked()
+        let asleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
+        if screenLocked && !locked { onUnlock() }
+        screenLocked = locked
+        if displaySleep != asleep {
+            if asleep { onDisplaySleep() } else { onDisplayWake() }
+        }
         if screenLocked { confirmLockRequest() }
     }
 
@@ -160,6 +166,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     }
 
     var signalLossSummary: String {
+        if ble.waitingForDeviceAfterUnlock { return "解锁后暂停锁定，等待设备恢复信号。" }
         guard ble.signalLossID != nil else { return "收到有效信号后，断连倒计时会自动取消。" }
         if ble.signalLossIgnored { return "本次断连不锁定；恢复有效信号后重新启用保护。" }
         if !ble.lockOnSignalLoss || ble.lockRSSI == ble.LOCK_DISABLED { return "设备信号中断，当前设置为不因断连锁定。" }
@@ -173,12 +180,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         defer { refreshStatus() }
         guard !isPreview else { return }
         let center = UNUserNotificationCenter.current()
-        if let previous = notifiedSignalLoss, previous != ble.signalLossID || ble.signalLossIgnored {
+        if let previous = notifiedSignalLoss, previous != ble.signalLossID || ble.signalLossIgnored || ble.waitingForDeviceAfterUnlock {
             let id = "signal-loss-\(previous.uuidString)"
             center.removePendingNotificationRequests(withIdentifiers: [id])
             center.removeDeliveredNotifications(withIdentifiers: [id])
         }
-        guard let episode = ble.signalLossID, !ble.signalLossIgnored else {
+        guard let episode = ble.signalLossID, !ble.signalLossIgnored, !ble.waitingForDeviceAfterUnlock else {
             notifiedSignalLoss = nil
             return
         }
@@ -359,18 +366,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
 
     func reachedWakeRange() {
         guard !isPreview, returnPolicy.wake, !manualLock, !systemSleep,
-              status.healthy, ble.withinWakeRange, displaySleep || screenLocked else { return }
-        recordEvent("信号已达到亮屏门槛 \(ble.wakeRSSI) dBm，已请求亮屏；密码解锁仍需达到 \(ble.unlockRSSI) dBm。")
-        wakeDisplay()
-        wakeTimer?.invalidate()
-        var attempts = 0
+              status.healthy, ble.withinWakeRange, wakeTimer?.isValid != true else { return }
+        displaySleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
+        guard displaySleep else { return }
+        recordEvent("收到有效返回信号 \(ble.lastRawRSSI ?? 0) dBm，达到亮屏条件；密码门槛仍为 \(ble.unlockRSSI) dBm。")
+        guard requestDisplayWake() else { return }
+        var attempts = 1
         wakeTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
-            guard let self = self, self.status.healthy, self.ble.withinWakeRange,
-                  self.returnPolicy.wake, !self.manualLock, !self.systemSleep,
-                  self.displaySleep, attempts < 3 else { timer.invalidate(); return }
-            attempts += 1
-            wakeDisplay()
+            guard let self = self else { timer.invalidate(); return }
+            guard self.status.healthy, self.ble.withinWakeRange, self.returnPolicy.wake,
+                  !self.manualLock, !self.systemSleep else {
+                timer.invalidate()
+                self.lastWakeResult = "亮屏确认已停止：信号或返回条件已改变"
+                self.recordEvent(self.lastWakeResult)
+                self.refreshStatus()
+                return
+            }
+            if CGDisplayIsAsleep(CGMainDisplayID()) == 0 {
+                self.onDisplayWake()
+            } else if attempts < 3 {
+                attempts += 1
+                if !self.requestDisplayWake() { timer.invalidate() }
+            } else {
+                timer.invalidate()
+                self.lastWakeResult = "亮屏请求已发送 3 次，但系统仍报告屏幕关闭；请检查合盖或系统睡眠状态"
+                self.recordEvent(self.lastWakeResult)
+                self.refreshStatus()
+            }
         }
+        RunLoop.main.add(wakeTimer!, forMode: .common)
+    }
+
+    private func requestDisplayWake() -> Bool {
+        let result = wakeDisplay()
+        lastWakeResult = result == 0 ? "已请求亮屏，等待系统确认" : "系统未接受亮屏请求，错误码：\(result)"
+        recordEvent(lastWakeResult)
+        refreshStatus()
+        return result == 0
     }
 
     func fakeKeyStrokes(_ string: String) {
@@ -462,6 +494,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         print("显示器已唤醒")
         recordEvent("系统确认显示器已唤醒。")
         displaySleep = false
+        if wakeTimer?.isValid == true { lastWakeResult = "系统已确认亮屏" }
         wakeTimer?.invalidate()
         wakeTimer = nil
         tryUnlockScreen()
@@ -471,6 +504,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     @objc func onDisplaySleep() {
         print("显示器已休眠")
         recordEvent("系统确认显示器已休眠。")
+        if !displaySleep { ble.displayDidSleep() }
         displaySleep = true
         refreshStatus()
     }
@@ -519,6 +553,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     }
 
     @objc func onUnlock() {
+        guard screenLocked || lockRequestAt != nil else { return }
         passwordAttemptedForLock = false
         screenLocked = false
         lockRequestAt = nil
@@ -536,7 +571,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         })
         if Date().timeIntervalSince1970 < unlockedAt + 10 { runScript("unlocked") }
         playNowPlaying()
-        if !ble.presence { ble.rearmAfterUnlock() }
+        ble.rearmAfterUnlock()
         manualLock = false
         testingUnlock = false
         refreshStatus()
@@ -709,7 +744,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
             addQuickMenuItem(key, title: title, to: mainMenu)
         }
         let more = NSMenu(title: "更多设置"); more.autoenablesItems = false
-        for (key, title) in [("passiveMode", "被动模式"), ("disconnectNotifications", "断连通知"),
+        for (key, title) in [("passiveMode", "被动模式"), ("pauseAfterManualUnlock", "手动解锁后等待设备"), ("disconnectNotifications", "断连通知"),
                              ("sleepDisplay", "锁定后关闭屏幕"), ("pauseItunes", "离开暂停播放"), ("resumeMedia", "解锁恢复播放"),
                              ("showDockIcon", "显示 Dock 图标"), ("hideDockWhenClosed", "关窗隐藏 Dock 图标"),
                              ("showStatusRSSI", "菜单栏显示信号"), ("loginEnabled", "登录时启动")] {
@@ -783,7 +818,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         prefs.register(defaults: ["lockRSSI": -80, "unlockRSSI": -60, "wakeRSSI": -90, "timeout": 6,
                                   "keepDisplayAwake": true, "lockOnSignalLoss": true, "signalLossLockDelay": 15,
-                                  "disconnectNotifications": true,
+                                  "disconnectNotifications": true, "pauseAfterManualUnlock": true,
                                   "lockDelay": 5, "thresholdRSSI": -70, "showSettingsOnLaunch": true,
                                   "wakeOnProximity": true, "sleepDisplay": true,
                                   "wakeWithoutUnlocking": true, "watchCompatible": true,
@@ -808,6 +843,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         ble.unlockRSSI = prefs.integer(forKey: "unlockRSSI")
         ble.wakeRSSI = min(prefs.integer(forKey: "wakeRSSI"), (ble.unlockRSSI == ble.UNLOCK_DISABLED ? -60 : ble.unlockRSSI) - 5)
         ble.signalTimeout = Double(prefs.integer(forKey: "timeout"))
+        ble.pauseAfterManualUnlock = prefs.bool(forKey: "pauseAfterManualUnlock")
         ble.lockOnSignalLoss = prefs.bool(forKey: "lockOnSignalLoss")
         ble.signalLossLockDelay = Double(max(1, min(600, prefs.integer(forKey: "signalLossLockDelay"))))
         ble.proximityTimeout = Double(prefs.integer(forKey: "lockDelay"))

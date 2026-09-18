@@ -139,11 +139,15 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     var signalLossIgnored = false
     var lockOnSignalLoss = true
     var signalLossLockDelay = 15.0
+    var pauseAfterManualUnlock = true
+    private(set) var waitingForDeviceAfterUnlock = false
     var presence = false
     var lockRSSI = -80
     var unlockRSSI = -60
     var wakeRSSI = -90
     var withinWakeRange = false
+    private var wakeReportedSinceDeparture = false
+    private var wakeOnNextNearSample = false
     var canUnlockAtCurrentSignal: Bool {
         unlockRSSI != UNLOCK_DISABLED && lastRawRSSI.map { ConnectionStatus.validRSSI($0) && $0 >= unlockRSSI } == true
     }
@@ -207,6 +211,9 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func startMonitor(uuid: UUID) {
         clearSignalLoss()
+        waitingForDeviceAfterUnlock = false
+        wakeReportedSinceDeparture = false
+        wakeOnNextNearSample = false
         if let p = monitoredPeripheral {
             centralMgr.cancelPeripheralConnection(p)
         }
@@ -216,6 +223,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         withinWakeRange = false
         delegate?.monitorEvent("已开始监测设备，等待有效信号；失联锁定计时已启用。")
         proximityTimer?.invalidate()
+        proximityTimer = nil
         resetSignalTimer()
         presence = true
         latestRSSIs.removeAll()
@@ -239,13 +247,30 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func rearmAfterUnlock() {
         guard monitoredUUID != nil else { return }
-        if !signalLossIgnored { clearSignalLoss(); delegate?.signalLossChanged() }
-        presence = true
+        let departureThreshold = lockRSSI == LOCK_DISABLED ? -80 : lockRSSI
+        let nearby = (centralMgr?.state ?? .poweredOn) == .poweredOn && presence && lastRawRSSI.map { ConnectionStatus.validRSSI($0) && $0 >= departureThreshold } == true
+            && lastSampleAt.map { Date().timeIntervalSince($0) < signalTimeout } == true
+        guard !nearby else { return }
+        waitingForDeviceAfterUnlock = pauseAfterManualUnlock
+        if !signalLossIgnored && !waitingForDeviceAfterUnlock { clearSignalLoss() }
+        presence = !waitingForDeviceAfterUnlock
         latestRSSIs.removeAll()
         proximityTimer?.invalidate()
         proximityTimer = nil
+        configureSignalLossLock()
         resetSignalTimer()
-        delegate?.monitorEvent("屏幕重新解锁，重新确认设备距离并启动失联计时。")
+        delegate?.monitorEvent(waitingForDeviceAfterUnlock
+            ? "设备不在附近时屏幕已解锁：暂停自动锁定，等待所选设备下一次有效信号；扫描继续。"
+            : "屏幕重新解锁，按设置重新确认距离并启动失联计时。")
+        delegate?.signalLossChanged()
+    }
+
+    func setPauseAfterManualUnlock(_ enabled: Bool) {
+        pauseAfterManualUnlock = enabled
+        if !enabled && waitingForDeviceAfterUnlock {
+            waitingForDeviceAfterUnlock = false
+            rearmAfterUnlock()
+        }
     }
 
     func signalLost() {
@@ -269,12 +294,12 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         signalLossTimer?.invalidate()
         signalLossTimer = nil
         guard let started = signalLossBeganAt, lockOnSignalLoss, !signalLossIgnored,
-              lockRSSI != LOCK_DISABLED else { return }
+              !waitingForDeviceAfterUnlock, lockRSSI != LOCK_DISABLED else { return }
         let episode = signalLossID
         let remaining = max(0.1, started.addingTimeInterval(signalLossLockDelay).timeIntervalSinceNow)
         signalLossTimer = Timer.scheduledTimer(withTimeInterval: remaining, repeats: false) { [weak self] _ in
             guard let self = self, self.signalLossID == episode, self.lockOnSignalLoss,
-                  !self.signalLossIgnored, self.lockRSSI != self.LOCK_DISABLED else { return }
+                  !self.signalLossIgnored, !self.waitingForDeviceAfterUnlock, self.lockRSSI != self.LOCK_DISABLED else { return }
             self.signalLossTimer = nil
             self.delegate?.monitorEvent("断连宽限时间已到，按当前设置请求锁定。")
             self.delegate?.updatePresence(presence: false, reason: "lost")
@@ -330,10 +355,13 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         return Int(mean)
     }
 
+    func displayDidSleep() { wakeOnNextNearSample = true }
+
     func updateMonitoredPeripheral(_ rssi: Int) {
         guard monitoredUUID != nil, ConnectionStatus.validRSSI(rssi) else { return }
         lastSampleAt = Date()
-        let recovered = signalLossID != nil
+        let recovered = signalLossID != nil || waitingForDeviceAfterUnlock
+        waitingForDeviceAfterUnlock = false
         if recovered {
             clearSignalLoss()
             // 恢复弱信号也要重新判断远离，不能被“本次不锁定”永久停用。
@@ -344,7 +372,14 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         lastRawRSSI = rssi
         let enteredWakeRange = rssi >= wakeRSSI && !withinWakeRange
         withinWakeRange = rssi >= wakeRSSI
+        if !withinWakeRange { wakeReportedSinceDeparture = false }
+        let departureThreshold = lockRSSI == LOCK_DISABLED ? -80 : lockRSSI
+        // ponytail: 用现有门槛加 5 dBm 回差确认返回，避免在远离区间持续亮屏。
+        let returnedFromDeparture = !presence && !wakeReportedSinceDeparture
+            && rssi >= max(wakeRSSI, departureThreshold + 5)
         let returnThreshold = unlockRSSI == UNLOCK_DISABLED ? -60 : unlockRSSI
+        let wakeAfterDisplaySleep = wakeOnNextNearSample && rssi >= max(wakeRSSI, returnThreshold)
+        if wakeAfterDisplaySleep { wakeOnNextNearSample = false }
         let cameBack = rssi >= returnThreshold && (!presence || recovered)
         if cameBack { latestRSSIs.removeAll() }
         let estimatedRSSI = getEstimatedRSSI(rssi: rssi)
@@ -354,19 +389,19 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             print("设备已靠近")
             delegate?.monitorEvent("信号达到靠近门槛 \(returnThreshold) dBm，判定设备已返回。")
             presence = true
+            wakeReportedSinceDeparture = true
             delegate?.updatePresence(presence: true, reason: "close")
-        } else if enteredWakeRange && (!presence || recovered) {
-            // 只报告重新进入亮屏范围，不改变远离状态，也不提前满足密码解锁条件。
+        } else if enteredWakeRange || returnedFromDeparture || wakeAfterDisplaySleep {
+            wakeReportedSinceDeparture = true
             delegate?.reachedWakeRange()
         }
-        let departureThreshold = lockRSSI == LOCK_DISABLED ? -80 : lockRSSI
         if estimatedRSSI >= departureThreshold {
             if proximityTimer != nil { delegate?.monitorEvent("信号恢复到远离门槛以上，取消延迟锁定。") }
             proximityTimer?.invalidate()
             proximityTimer = nil
         } else if presence && proximityTimer == nil {
             proximityTimer = Timer.scheduledTimer(withTimeInterval: proximityTimeout, repeats: false) { [weak self] _ in
-                guard let self = self else { return }
+                guard let self = self, !self.waitingForDeviceAfterUnlock else { return }
                 self.proximityTimer = nil
                 guard let sample = self.lastSampleAt, Date().timeIntervalSince(sample) < min(3, self.signalTimeout) else {
                     self.delegate?.monitorEvent("远离确认到期但没有持续的新采样，等待断连确认，不凭旧的弱信号立即锁定。")
@@ -375,6 +410,7 @@ class BLE: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                 print("设备已远离")
                 self.delegate?.monitorEvent("信号持续低于远离门槛，远离确认计时已到。")
                 self.presence = false
+                self.wakeReportedSinceDeparture = false
                 self.proximityTimer = nil
                 self.delegate?.updatePresence(presence: false, reason: "away")
             }

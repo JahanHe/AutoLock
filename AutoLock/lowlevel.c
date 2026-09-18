@@ -1,8 +1,8 @@
 #include "lowlevel.h"
 #include <IOKit/pwr_mgt/IOPMLib.h>
 
-void wakeDisplay(void)
+int wakeDisplay(void)
 {
     static IOPMAssertionID assertionID;
-    IOPMAssertionDeclareUserActivity(CFSTR("AutoLock"), kIOPMUserActiveLocal, &assertionID);
+    return IOPMAssertionDeclareUserActivity(CFSTR("AutoLock"), kIOPMUserActiveLocal, &assertionID);
 }

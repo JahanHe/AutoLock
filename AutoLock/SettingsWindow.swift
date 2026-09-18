@@ -31,10 +31,10 @@ extension AppDelegate {
     func refreshStatus() {
         updateDisplayAssertion()
         refreshQuickMenu()
-        ignoreLossMenuItem?.isHidden = ble.signalLossID == nil || ble.signalLossIgnored
+        ignoreLossMenuItem?.isHidden = ble.signalLossID == nil || ble.signalLossIgnored || ble.waitingForDeviceAfterUnlock
         objectWillChange.send()
         let value = status
-        monitorMenuItem?.title = ble.signalLossID != nil ? signalLossSummary : value.title
+        monitorMenuItem?.title = (ble.signalLossID != nil || ble.waitingForDeviceAfterUnlock) ? signalLossSummary : value.title
         guard let button = statusItem.button else { return }
         let colorLock = prefs.bool(forKey: "colorStatusIcon")
         let showLight = prefs.bool(forKey: "showStatusLight") && !colorLock
@@ -59,7 +59,7 @@ extension AppDelegate {
         icon.isTemplate = !showLight && !colorLock
         button.image = icon
         button.title = prefs.bool(forKey: "showStatusRSSI") ? (lastRSSI.map { " \($0)" } ?? " —") : ""
-        button.toolTip = "AutoLock：\(value.title)\n\(ble.signalLossID != nil ? signalLossSummary : value.detail)"
+        button.toolTip = "AutoLock：\(value.title)\n\((ble.signalLossID != nil || ble.waitingForDeviceAfterUnlock) ? signalLossSummary : value.detail)"
         button.setAccessibilityLabel("AutoLock，\(value.title)")
     }
 
@@ -218,6 +218,7 @@ extension AppDelegate {
         if !prefs.bool(forKey: "showStatusIcon") && !prefs.bool(forKey: "showStatusLight") {
             prefs.set(true, forKey: key == "showStatusIcon" ? "showStatusLight" : "showStatusIcon")
         }
+        if key == "pauseAfterManualUnlock" { ble.setPauseAfterManualUnlock(enabled) }
         if key == "passiveMode" {
             if isPreview { ble.passiveMode = enabled } else { ble.setPassiveMode(enabled) }
         }
@@ -246,7 +247,7 @@ extension AppDelegate {
          "sleepDisplay": "锁定后关屏", "screensaver": "锁定后屏保", "pauseItunes": "离开暂停媒体", "resumeMedia": "解锁后恢复媒体",
          "lockNotifications": "锁定通知", "checkUpdates": "版本检查", "showSettingsOnLaunch": "启动时显示窗口",
          "colorStatusIcon": "状态颜色融入锁图标", "showDockIcon": "显示 Dock 图标", "hideDockWhenClosed": "关窗后隐藏 Dock 图标",
-         "keepDisplayAwake": "附近保持亮屏", "lockOnSignalLoss": "断连后自动锁定", "disconnectNotifications": "断连通知"][key] ?? "选项"
+         "pauseAfterManualUnlock": "手动解锁后等待设备", "keepDisplayAwake": "附近保持亮屏", "lockOnSignalLoss": "断连后自动锁定", "disconnectNotifications": "断连通知"][key] ?? "选项"
     }
 
     func setAutomaticLock(_ enabled: Bool) {
@@ -545,6 +546,15 @@ extension AppDelegate {
         check(!ble.lockOnSignalLoss && ble.lockRSSI != ble.LOCK_DISABLED, "关闭断连锁定不能关闭远离保护")
         setOption("lockOnSignalLoss", true)
         check(ble.lockOnSignalLoss, "断连保护可以重新打开")
+        setOption("pauseAfterManualUnlock", false)
+        check(!ble.pauseAfterManualUnlock, "等待设备选项应同步到实际判断器")
+        setOption("pauseAfterManualUnlock", true)
+        ble.presence = false; ble.rearmAfterUnlock()
+        check(ble.waitingForDeviceAfterUnlock && monitorMenuItem?.title.contains("暂停") == true, "暂停锁定必须同步显示到菜单")
+        check(signalLossSummary.contains("等待设备"), "暂停时不能显示仍在倒计时")
+        ble.updateMonitoredPeripheral(-50)
+        check(!ble.waitingForDeviceAfterUnlock, "下一次有效采样恢复保护")
+        ble.signalTimer?.invalidate(); ble.proximityTimer?.invalidate()
         setOption("keepDisplayAwake", true)
         check(displayAssertion == 0, "隔离预览不得申请真实保持亮屏")
         setOption("keepDisplayAwake", false)
@@ -621,7 +631,7 @@ extension AppDelegate {
         panel.nameFieldStringValue = "AutoLock-诊断.zip"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         var settings: [String: Any] = [:]
-        for key in ["passiveMode", "wakeWithoutUnlocking", "watchCompatible", "wakeOnProximity", "sleepDisplay", "screensaver", "pauseItunes", "resumeMedia", "lockNotifications", "checkUpdates", "showSettingsOnLaunch", "showStatusLight", "showStatusIcon", "showStatusRSSI", "colorStatusIcon", "showDockIcon", "hideDockWhenClosed", "keepDisplayAwake", "lockOnSignalLoss", "disconnectNotifications"] {
+        for key in ["passiveMode", "wakeWithoutUnlocking", "watchCompatible", "wakeOnProximity", "sleepDisplay", "screensaver", "pauseItunes", "resumeMedia", "lockNotifications", "checkUpdates", "showSettingsOnLaunch", "showStatusLight", "showStatusIcon", "showStatusRSSI", "colorStatusIcon", "showDockIcon", "hideDockWhenClosed", "keepDisplayAwake", "lockOnSignalLoss", "disconnectNotifications", "pauseAfterManualUnlock"] {
             settings[optionName(key)] = prefs.bool(forKey: key)
         }
         settings["自动锁定"] = ble.lockRSSI != ble.LOCK_DISABLED
@@ -637,6 +647,7 @@ extension AppDelegate {
             "监测状态": status.title, "采样方式": monitorModeDescription, "屏幕已锁定": screenLocked,
             "辅助功能权限": accessibilityGranted, "密码是否已保存": hasPassword,
             "附近保持亮屏已生效": displayAssertion != 0, "保持亮屏错误": displayAssertionError ?? "暂无",
+            "解锁后等待设备": ble.waitingForDeviceAfterUnlock, "最近亮屏结果": lastWakeResult,
             "断连策略状态": signalLossSummary, "通知权限": notificationPermission,
             "最近操作错误": lastActionError ?? "暂无", "日志状态": diagnosticStatus, "功能设置": settings]
         do {
@@ -705,6 +716,10 @@ extension AppDelegate {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let composited = args.contains("--capture-composited")
         if composited { precondition(!isScreenLocked() && CGDisplayIsAsleep(CGMainDisplayID()) == 0, "合成截图需要先解锁 Mac 并保持亮屏；普通隔离检查不需要") }
+        if composited, let window = settingsWindow, let screen = window.screen {
+            // 演示窗口靠左，避免右上角系统通知进入对外发布的截图区域。
+            window.setFrameOrigin(NSPoint(x: screen.visibleFrame.minX + 20, y: window.frame.minY))
+        }
         // 可选的原生合成截图使用本应用的彩色衬底，不截取用户桌面或其他应用内容。
         let backdrop = composited ? NSWindow(contentRect: settingsWindow!.frame.insetBy(dx: -30, dy: -30), styleMask: .borderless, backing: .buffered, defer: false) : nil
         backdrop?.isReleasedWhenClosed = false
@@ -724,7 +739,7 @@ extension AppDelegate {
         // ponytail: 复用真实设置窗口截图，演示模式隔离所有系统操作，无需维护第二套界面。
         var glassColors: [String: [CGFloat]] = [:]
         let scenes: [(String, SettingsPage)] = [("浅色", .overview), ("深色", .overview), ("设备", .device),
-            ("离开锁定", .lock), ("靠近与解锁", .returning), ("分段亮屏", .tests), ("菜单栏外观", .appearance), ("其他设置", .extras), ("效果测试", .tests), ("运行记录", .activity), ("失联", .overview), ("已锁定", .overview), ("已关屏", .overview), ("屏保", .overview), ("透明对照", .overview)]
+            ("离开锁定", .lock), ("靠近与解锁", .returning), ("分段亮屏", .tests), ("菜单栏外观", .appearance), ("其他设置", .extras), ("效果测试", .tests), ("运行记录", .activity), ("失联", .overview), ("已锁定", .overview), ("已关屏", .overview), ("屏保", .overview), ("透明对照", .overview), ("解锁暂停", .overview)]
         for (offset, scene) in scenes.enumerated() {
             let (name, page) = scene
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(offset * 3 + 2)) {
@@ -749,6 +764,11 @@ extension AppDelegate {
                 self.inScreensaver = name == "屏保"
                 self.recordSignalSample(name == "失联" ? nil : self.lastRSSI)
                 if name == "失联" { self.lastRSSI = nil; self.lastSignalAt = nil; self.previewScenario = 2 }
+                if name == "解锁暂停" {
+                    self.lastRSSI = nil; self.lastSignalAt = nil; self.ble.presence = false
+                    self.ble.rearmAfterUnlock()
+                    self.ble.signalTimer?.invalidate()
+                }
                 self.refreshStatus()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     let path = directory.appendingPathComponent("设置窗口-\(name).png")
@@ -903,6 +923,7 @@ struct SettingsView: View {
             option("passiveMode", "被动模式", "")
         case .lock:
             switchRow("自动锁定", "", binding: Binding(get: { app.ble.lockRSSI != app.ble.LOCK_DISABLED }, set: app.setAutomaticLock))
+            option("pauseAfterManualUnlock", "手动解锁后等待设备", "")
             option("disconnectNotifications", "断连通知", "")
             option("lockOnSignalLoss", "断连后自动锁定", "")
         case .returning:
@@ -966,6 +987,7 @@ struct SettingsView: View {
         if app.systemSleep { return "系统休眠中，等待恢复扫描。" }
         if app.screenLocked && app.manualLock { return "手动锁定保护中，设备离开再回来才执行返回动作。" }
         if app.screenLocked { return "屏幕已锁定，继续监测返回条件。" }
+        if app.ble.waitingForDeviceAfterUnlock { return app.signalLossSummary }
         if app.ble.proximityTimer?.isValid == true { return "信号持续偏弱，正在确认是否离开。" }
         if app.ble.signalLossID != nil { return app.signalLossSummary }
         if !app.status.healthy { return "监测信号异常，等待断连确认与所选处理策略。" }
@@ -1083,6 +1105,7 @@ struct SettingsView: View {
                 Divider()
                 number("lockRSSI", "远离信号门槛", "平均信号低于此值时开始计时。若走很远才锁定，可适当提高这个数值。", value: app.ble.lockRSSI == app.ble.LOCK_DISABLED ? -80 : app.ble.lockRSSI, range: -99 ... -6, unit: "dBm")
                     .disabled(app.ble.lockRSSI == app.ble.LOCK_DISABLED)
+                option("pauseAfterManualUnlock", "手动解锁后等待设备", "默认开启。设备不在附近时由手动、Touch ID 或 Apple Watch 解锁后，暂停自动锁定并继续扫描；直到所选设备再次提供有效信号才恢复。无效信号或重开蓝牙不结束暂停。关闭后恢复原来的自动锁定策略；重启应用或更换设备会开启新的监测周期。")
                 number("lockDelay", "远离确认时间", "持续远离达到此时间才锁定，短暂信号波动会取消计时。", value: Int(app.ble.proximityTimeout), range: 1 ... 300, unit: "秒")
 
             }
@@ -1119,7 +1142,7 @@ struct SettingsView: View {
             }
             card("靠近动作", icon: "sun.max") {
                 switchRow("启用靠近动作", "只影响回来之后的行为，不会关闭离开自动锁定。", binding: Binding(get: { app.ble.unlockRSSI != app.ble.UNLOCK_DISABLED }, set: app.setReturnEnabled))
-                option("wakeOnProximity", "第一步：靠近亮屏", "从更远处重新达到亮屏门槛，或失联后恢复信号时先点亮屏幕。不会因为持续停在远处就反复亮屏。深度睡眠、关机或合盖时无法保证扫描。")
+                option("wakeOnProximity", "第一步：靠近亮屏", "进入亮屏范围、失联后恢复，或从远离区间回到远离门槛加 5 dBm 时点亮屏幕。熄屏后再次收到达到密码门槛的近处信号也可亮屏，仍遵守手动锁定保护。不会因持续弱信号反复亮屏。深度睡眠、关机或合盖时无法保证扫描。")
                     .disabled(app.ble.unlockRSSI == app.ble.UNLOCK_DISABLED)
                 number("wakeRSSI", "亮屏信号门槛", "例如 -90 dBm：收到这个强度或更强的信号，先亮屏。与密码解锁门槛至少间隔 5 dBm，调整时会自动保持顺序。", value: app.ble.wakeRSSI, range: -99 ... -6, unit: "dBm")
                     .disabled(!app.returnPolicy.wake)
@@ -1252,14 +1275,14 @@ struct SettingsView: View {
     private var liveStatusPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label("当前运行状态", systemImage: "waveform.path.ecg").font(.headline)
-            if app.ble.signalLossID != nil {
+            if app.ble.signalLossID != nil || app.ble.waitingForDeviceAfterUnlock {
                 if let timer = app.ble.signalLossTimer, timer.isValid {
                     lockCountdown("断连后锁定", timer: timer, total: app.ble.signalLossLockDelay)
                 }
                 Text(app.signalLossSummary).font(.callout).foregroundStyle(.orange)
                 HStack {
                     Button("重新连接") { app.reconnectDevice() }
-                    Button("本次不锁定") { app.ignoreCurrentSignalLoss() }.disabled(app.ble.signalLossIgnored)
+                    Button("本次不锁定") { app.ignoreCurrentSignalLoss() }.disabled(app.ble.signalLossID == nil || app.ble.signalLossIgnored || app.ble.waitingForDeviceAfterUnlock)
                 }
                 Divider()
             }
@@ -1268,7 +1291,7 @@ struct SettingsView: View {
                     liveScreen
                     signalGauge
                     signalChart
-                    statusRow("离开保护", app.ble.lockRSSI == app.ble.LOCK_DISABLED ? "已关闭" : "已开启")
+                    statusRow("离开保护", app.ble.lockRSSI == app.ble.LOCK_DISABLED ? "已关闭" : (app.ble.waitingForDeviceAfterUnlock ? "暂停 · 等待设备" : "已开启"))
                     statusRow("系统锁定", app.screenLocked ? "已锁定" : "未锁定")
                     statusRow("监测方式", app.prefs.bool(forKey: "passiveMode") ? "被动广播" : "主动优先")
                     Divider()
@@ -1280,6 +1303,7 @@ struct SettingsView: View {
                     }
                     Divider()
                     statusRow("靠近亮屏", app.returnPolicy.wake ? "\(app.ble.wakeRSSI) dBm" : "已关闭")
+                    Text(app.lastWakeResult).font(.caption).foregroundStyle(.secondary)
                     statusRow("密码解锁", passwordStatusText)
                     statusRow("辅助功能", app.accessibilityGranted ? "已授权" : "未授权")
                         .foregroundStyle(app.accessibilityGranted ? .green : .orange)
