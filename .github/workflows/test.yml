@@ -30,8 +30,8 @@ jobs:
           codesign --force --sign - build/Build/Products/Release/AutoLock.app
           codesign --verify --deep --strict build/Build/Products/Release/AutoLock.app
       - name: 压缩中文测试版
-        run: ditto -c -k --keepParent build/Build/Products/Release/AutoLock.app AutoLock-1.13.6.zip
+        run: ditto -c -k --keepParent build/Build/Products/Release/AutoLock.app AutoLock-1.13.7.zip
       - uses: actions/upload-artifact@v7
         with:
-          name: AutoLock-1.13.6-中文测试版
-          path: AutoLock-1.13.6.zip
+          name: AutoLock-1.13.7-中文测试版
+          path: AutoLock-1.13.7.zip

@@ -79,11 +79,11 @@ extension AppDelegate {
         if settingsWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 980, height: 760),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-            window.title = isLocalTest ? "AutoLock · 本地测试版" : "AutoLock"
+            window.title = "AutoLock"
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
-            window.isOpaque = false
-            window.backgroundColor = .clear
+            window.isOpaque = true
+            window.backgroundColor = .windowBackgroundColor
             window.toolbarStyle = .unified
             let toolbar = NSToolbar(identifier: "AutoLockToolbar")
             toolbar.delegate = self
@@ -97,21 +97,7 @@ extension AppDelegate {
             window.delegate = self
             window.standardWindowButton(.miniaturizeButton)?.target = self
             window.standardWindowButton(.miniaturizeButton)?.action = #selector(minimizeSettings)
-            // ponytail: 原生窗口后方混合直接透出桌面，无需截图权限或自制模糊算法。
-            let glass = NSVisualEffectView()
-            glass.material = .sidebar
-            glass.blendingMode = .behindWindow
-            glass.state = .active
-            let content = NSHostingView(rootView: SettingsView(app: self))
-            content.translatesAutoresizingMaskIntoConstraints = false
-            glass.addSubview(content)
-            NSLayoutConstraint.activate([
-                content.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
-                content.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
-                content.topAnchor.constraint(equalTo: glass.topAnchor),
-                content.bottomAnchor.constraint(equalTo: glass.bottomAnchor)
-            ])
-            window.contentView = glass
+            window.contentView = NSHostingView(rootView: SettingsView(app: self))
             if !isPreview { window.setFrameAutosaveName("MacAutolockSettings") }
             window.center()
             settingsWindow = window
@@ -137,7 +123,7 @@ extension AppDelegate {
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         guard identifier.rawValue == "AutoLockTitle" else { return nil }
         let item = NSToolbarItem(itemIdentifier: identifier)
-        let title = NSTextField(labelWithString: isPreview ? "AutoLock · 演示模式" : (isLocalTest ? "AutoLock · 本地测试版" : "AutoLock"))
+        let title = NSTextField(labelWithString: "AutoLock")
         title.font = .systemFont(ofSize: 21, weight: .semibold)
         item.view = title
         item.label = "AutoLock"
@@ -587,7 +573,7 @@ extension AppDelegate {
         check(signalLossCategory.actions.first?.options.contains(.foreground) == false, "通知取消操作不必打开应用窗口")
         check(signalLossCategory.actions.last?.identifier == "reconnect-device", "通知也提供重新连接入口")
         check(settingsWindow?.styleMask.contains(.fullSizeContentView) == true && settingsWindow?.titlebarAppearsTransparent == true, "窗口顶部必须与内容融合")
-        check(settingsWindow?.toolbar?.items.contains { $0.itemIdentifier.rawValue == "AutoLockTitle" } == true, "统一工具栏显示 AutoLock")
+        check((settingsWindow?.toolbar?.items.first?.view as? NSTextField)?.stringValue == "AutoLock", "窗口按钮旁只显示 AutoLock")
         check([NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].allSatisfy { settingsWindow?.standardWindowButton($0) != nil }, "必须保留三个原生窗口按钮")
         setAutomaticLock(true)
         toggleQuickSetting(quickMenuItems["automaticLock"]!)
@@ -612,8 +598,8 @@ extension AppDelegate {
         check(signalHistory.last?.rssi == nil, "无效信号在曲线中保留为断点")
         for _ in 0..<300 { recordSignalSample(-55, at: sampleTime) }
         check(signalHistory.count == 240, "广播密集时曲线样本也必须有界")
-        check(settingsWindow?.isOpaque == false && settingsWindow?.backgroundColor == .clear, "窗口底层必须透明，不能遮住桌面")
-        check((settingsWindow?.contentView as? NSVisualEffectView)?.blendingMode == .behindWindow, "毛玻璃必须混合窗口后方内容")
+        check(settingsWindow?.isOpaque == true && settingsWindow?.backgroundColor == .windowBackgroundColor, "窗口使用不透明的系统背景色")
+        check(settingsWindow?.contentView is NSHostingView<SettingsView>, "设置直接承载在窗口中，无毛玻璃包装层")
         screenLocked = false; displaySleep = false; systemSleep = false; inScreensaver = false
         check(screenPresentation.title == "桌面已解锁" && screenPresentation.lit, "桌面状态必须来自系统状态")
         lockRequestAt = Date()
@@ -683,15 +669,15 @@ extension AppDelegate {
         refreshStatus()
     }
 
-    private func capturePreviewWindow(to path: URL, composited: Bool) -> [CGFloat]? {
+    private func capturePreviewWindow(to path: URL, composited: Bool) {
         precondition(isPreview)
-        guard let window = settingsWindow else { return nil }
+        guard let window = settingsWindow else { return }
         if !composited {
             guard let view = window.contentView?.superview,
-                  let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+                  let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
             view.cacheDisplay(in: view.bounds, to: bitmap)
             try? bitmap.representation(using: .png, properties: [:])?.write(to: path)
-            return nil
+            return
         }
         window.orderFrontRegardless()
         let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]]
@@ -708,9 +694,6 @@ extension AppDelegate {
         do { try capture.run(); capture.waitUntilExit() }
         catch { preconditionFailure("窗口合成截图失败：\(error)") }
         precondition(capture.terminationStatus == 0, "窗口合成截图失败，请确认屏幕已解锁和截图权限")
-        guard let data = try? Data(contentsOf: path), let bitmap = NSBitmapImageRep(data: data),
-              let color = bitmap.colorAt(x: bitmap.pixelsWide * 3 / 4, y: 24)?.usingColorSpace(.deviceRGB) else { return nil }
-        return [color.redComponent, color.greenComponent, color.blueComponent]
     }
 
     func configurePreviewCapture() {
@@ -745,16 +728,10 @@ extension AppDelegate {
             // 演示窗口靠左，避免右上角系统通知进入对外发布的截图区域。
             window.setFrameOrigin(NSPoint(x: screen.visibleFrame.minX + 20, y: window.frame.minY))
         }
-        // 可选的原生合成截图使用本应用的彩色衬底，不截取用户桌面或其他应用内容。
-        let backdrop = composited ? NSWindow(contentRect: settingsWindow!.frame.insetBy(dx: -30, dy: -30), styleMask: .borderless, backing: .buffered, defer: false) : nil
-        backdrop?.isReleasedWhenClosed = false
-        backdrop?.backgroundColor = .systemBlue
-        backdrop?.ignoresMouseEvents = true
         let checks = verifyPreviewSettings()
         if composited {
             settingsWindow?.level = .floating
             settingsWindow?.ignoresMouseEvents = true
-            backdrop?.level = .floating
         }
         let report: [String: Any] = ["设置检查通过": checks, "隔离预览": isPreview,
                                     "系统版本": ProcessInfo.processInfo.operatingSystemVersionString]
@@ -762,28 +739,14 @@ extension AppDelegate {
             try? data.write(to: directory.appendingPathComponent("预览检查.json"))
         }
         // ponytail: 复用真实设置窗口截图，演示模式隔离所有系统操作，无需维护第二套界面。
-        var glassColors: [String: [CGFloat]] = [:]
         let scenes: [(String, SettingsPage)] = [("浅色", .overview), ("深色", .overview), ("设备", .device),
-            ("离开锁定", .lock), ("靠近与解锁", .returning), ("分段亮屏", .tests), ("菜单栏外观", .appearance), ("其他设置", .extras), ("效果测试", .tests), ("运行记录", .activity), ("失联", .overview), ("已锁定", .overview), ("已关屏", .overview), ("屏保", .overview), ("透明对照", .overview), ("解锁暂停", .overview)]
-        func finishCapture() {
-            if composited {
-                let difference = zip(glassColors["浅色"] ?? [], glassColors["透明对照"] ?? []).map { abs($0 - $1) }.max() ?? 0
-                let result: [String: Any] = ["标题区域背景色差": difference, "透背景检查通过": difference > 0.05, "采样颜色": glassColors]
-                if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
-                    try? data.write(to: directory.appendingPathComponent("透明检查.json"))
-                }
-                precondition(difference > 0.05, "切换窗口后方背景时，标题区必须有可见颜色变化")
-            }
-            backdrop?.close(); NSApp.terminate(nil)
-        }
+            ("离开锁定", .lock), ("靠近与解锁", .returning), ("分段亮屏", .tests), ("菜单栏外观", .appearance), ("其他设置", .extras), ("效果测试", .tests), ("运行记录", .activity), ("失联", .overview), ("已锁定", .overview), ("已关屏", .overview), ("屏保", .overview), ("解锁暂停", .overview)]
         func captureScene(_ offset: Int) {
-            guard offset < scenes.count else { finishCapture(); return }
+            guard offset < scenes.count else { NSApp.terminate(nil); return }
             let (name, page) = scenes[offset]
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.settingsWindow?.appearance = NSAppearance(named: offset == 1 ? .darkAqua : .aqua)
-                if let backdrop = backdrop, let window = self.settingsWindow {
-                    backdrop.backgroundColor = name == "透明对照" ? .systemOrange : .systemBlue
-                    backdrop.order(.below, relativeTo: window.windowNumber)
+                if composited, let window = self.settingsWindow {
                     window.makeKeyAndOrderFront(nil)
                     NSApp.activate(ignoringOtherApps: true)
                 }
@@ -809,7 +772,7 @@ extension AppDelegate {
                 self.refreshStatus()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     let path = directory.appendingPathComponent("设置窗口-\(name).png")
-                    if let color = self.capturePreviewWindow(to: path, composited: composited) { glassColors[name] = color }
+                    self.capturePreviewWindow(to: path, composited: composited)
                     if name == "靠近与解锁" {
                         let result = ["目标分组": page.rawValue, "当前分组": self.settingsPage.rawValue]
                         if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
@@ -895,15 +858,7 @@ struct SettingsView: View {
             Divider()
             liveStatusPanel.frame(width: 300).padding(20)
         }.frame(minHeight: 620)
-            .background {
-                LinearGradient(stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.72), location: 0.16),
-                    .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.9), location: 1)
-                ], startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea(.container, edges: .top)
-                    .allowsHitTesting(false).accessibilityHidden(true)
-            }
+            .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea(.container, edges: .top))
             .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
     }
 
