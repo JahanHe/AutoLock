@@ -72,6 +72,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     var aboutBox: AboutBox? = nil
     var wakeTimer: Timer?
     var lastWakeResult = "尚未请求亮屏"
+    var lastBrightnessResult = "尚未调节亮度"
+    lazy var brightness: DisplayBrightness = {
+        let saved = prefs.data(forKey: "brightnessRestore").flatMap {
+            try? JSONDecoder().decode([String: DisplayBrightness.Snapshot].self, from: $0)
+        } ?? [:]
+        return DisplayBrightness(saved: saved, read: { id in
+            var value: Float = 0
+            return (getDisplayBrightness(id, &value), value)
+        }, write: { setDisplayBrightness($0, $1) }, persist: { [weak self] state in
+            guard let self = self else { return }
+            do { self.prefs.set(try JSONEncoder().encode(state), forKey: "brightnessRestore") }
+            catch { self.recordEvent("原亮度记录保存失败：\(error.localizedDescription)") }
+        })
+    }()
+
     var manualLock = false
     var unlockedAt = 0.0
     var inScreensaver = false
@@ -81,7 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     var screenPresentation: (title: String, symbol: String, lit: Bool) {
         if systemSleep { return ("系统睡眠中", "moon.zzz", false) }
         if displaySleep { return ("屏幕已关闭", "power", false) }
-        if screenLocked { return ("已锁定 · 等待解锁", "lock.fill", true) }
+        if screenLocked { return (brightness.isDimmed ? "已锁定 · 低亮度" : "已锁定 · 等待解锁", "lock.fill", true) }
         if inScreensaver { return ("屏幕保护程序", "sparkles", true) }
         return ("桌面已解锁", "macwindow", true)
     }
@@ -137,7 +152,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     }
 
     var shouldKeepDisplayAwake: Bool {
-        ConnectionStatus.shouldKeepDisplayAwake(enabled: prefs.bool(forKey: "keepDisplayAwake"),
+        if brightness.isDimmed && !systemSleep && !displaySleep { return true }
+        return ConnectionStatus.shouldKeepDisplayAwake(enabled: prefs.bool(forKey: "keepDisplayAwake"),
             healthy: status.healthy, present: ble.presence, raw: ble.lastRawRSSI, average: lastRSSI,
             threshold: keepAwakeThreshold, age: lastSignalAt.map { Date().timeIntervalSince($0) },
             manualLock: manualLock || screenLocked, systemSleep: systemSleep, displaySleep: displaySleep)
@@ -148,7 +164,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         if shouldKeepDisplayAwake, displayAssertion == 0, displayAssertionError == nil {
             let result = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
                 IOPMAssertionLevel(kIOPMAssertionLevelOn), "AutoLock：随身设备持续在附近" as CFString, &displayAssertion)
-            if result == kIOReturnSuccess { recordEvent("附近保持亮屏已生效：防止空闲关屏，仍可主动锁定或休眠。") }
+            if result == kIOReturnSuccess { recordEvent(brightness.isDimmed ? "低亮度待机已生效：防止空闲关屏，系统仍保持锁定。" : "附近保持亮屏已生效：防止空闲关屏，仍可主动锁定或休眠。") }
             else { displayAssertion = 0; displayAssertionError = "保持亮屏失败，系统错误：\(result)"; recordEvent(displayAssertionError!) }
         } else if !shouldKeepDisplayAwake {
             releaseDisplayAssertion()
@@ -326,9 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         }
         lockRequestAt = Date()
         recordEvent("已向系统请求锁定，等待锁定状态确认。")
-        // 先锁屏，再处理显示效果；屏保不能替代锁定。
-        if prefs.bool(forKey: "sleepDisplay") { turnOffDisplay() }
-        else if prefs.bool(forKey: "screensaver") { startScreensaver() }
+        // 显示效果等系统确认锁定后再处理，不能把请求误当成成功。
         return true
     }
 
@@ -367,6 +381,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     func reachedWakeRange() {
         guard !isPreview, returnPolicy.wake, !manualLock, !systemSleep,
               status.healthy, ble.withinWakeRange, wakeTimer?.isValid != true else { return }
+        restoreDisplayBrightness()
         displaySleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
         guard displaySleep else { return }
         recordEvent("收到有效返回信号 \(ble.lastRawRSSI ?? 0) dBm，达到亮屏条件；密码门槛仍为 \(ble.unlockRSSI) dBm。")
@@ -397,7 +412,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         RunLoop.main.add(wakeTimer!, forMode: .common)
     }
 
-    private func requestDisplayWake() -> Bool {
+    func requestDisplayWake() -> Bool {
         let result = wakeDisplay()
         lastWakeResult = result == 0 ? "已请求亮屏，等待系统确认" : "系统未接受亮屏请求，错误码：\(result)"
         recordEvent(lastWakeResult)
@@ -545,6 +560,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         recordEvent("系统已确认屏幕锁定。")
         lastActionError = nil
         lockRequestAt = nil
+        if prefs.bool(forKey: "dimOnLock") { dimDisplay() }
+        else if prefs.bool(forKey: "screensaver") { startScreensaver() }
         if let reason = pendingLockReason {
             pendingLockReason = nil
             notifyUser(reason)
@@ -558,6 +575,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         screenLocked = false
         lockRequestAt = nil
         pendingLockReason = nil
+        restoreDisplayBrightness()
         recordEvent("系统已确认屏幕解锁。Apple Watch、Touch ID 或手动解锁的具体来源由系统决定。")
         lastActionError = nil
         Timer.scheduledTimer(withTimeInterval: 2, repeats: false, block: { _ in
@@ -745,7 +763,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         }
         let more = NSMenu(title: "更多设置"); more.autoenablesItems = false
         for (key, title) in [("passiveMode", "被动模式"), ("pauseAfterManualUnlock", "手动解锁后等待设备"), ("disconnectNotifications", "断连通知"),
-                             ("sleepDisplay", "锁定后关闭屏幕"), ("pauseItunes", "离开暂停播放"), ("resumeMedia", "解锁恢复播放"),
+                             ("dimOnLock", "锁定后降低亮度"), ("pauseItunes", "离开暂停播放"), ("resumeMedia", "解锁恢复播放"),
                              ("showDockIcon", "显示 Dock 图标"), ("hideDockWhenClosed", "关窗隐藏 Dock 图标"),
                              ("showStatusRSSI", "菜单栏显示信号"), ("loginEnabled", "登录时启动")] {
             addQuickMenuItem(key, title: title, to: more)
@@ -820,7 +838,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
                                   "keepDisplayAwake": true, "lockOnSignalLoss": true, "signalLossLockDelay": 15,
                                   "disconnectNotifications": true, "pauseAfterManualUnlock": true,
                                   "lockDelay": 5, "thresholdRSSI": -70, "showSettingsOnLaunch": true,
-                                  "wakeOnProximity": true, "sleepDisplay": true,
+                                  "wakeOnProximity": true, "dimOnLock": true, "dimBrightness": 5,
                                   "wakeWithoutUnlocking": true, "watchCompatible": true,
                                   "showStatusLight": true, "showStatusIcon": true, "showStatusRSSI": false,
                                   "colorStatusIcon": true, "showDockIcon": true, "hideDockWhenClosed": true,
@@ -839,6 +857,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
         }
         recordEvent(isPreview ? "已进入隔离演示模式，不执行真实系统操作。" : "应用已启动，版本 \(buildDescription)，源码 \(sourceRevision)；正在初始化设备监测。")
         ble.delegate = self
+        if !isPreview { restoreDisplayBrightness() }
         ble.lockRSSI = prefs.integer(forKey: "lockRSSI")
         ble.unlockRSSI = prefs.integer(forKey: "unlockRSSI")
         ble.wakeRSSI = min(prefs.integer(forKey: "wakeRSSI"), (ble.unlockRSSI == ble.UNLOCK_DISABLED ? -60 : ble.unlockRSSI) - 5)
@@ -932,6 +951,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ aNotification: Notification) {
+        restoreDisplayBrightness()
         releaseDisplayAssertion()
         ble.signalLossTimer?.invalidate()
         statusTimer?.invalidate()

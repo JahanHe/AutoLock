@@ -7,6 +7,7 @@
 	objects = {
 
 /* PBXBuildFile 配置开始 */
+		CA1000000000000000000032 /* DisplayBrightness.swift（源码） */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000031; };
 		CA1000000000000000000022 /* DiagnosticLog.swift（源码） */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000021; };
 		CA1000000000000000000012 /* SettingsWindow.swift（源码） */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000011; };
 		CA1000000000000000000002 /* ConnectionStatus.swift（源码） */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000001; };
@@ -44,6 +45,7 @@
 /* PBXCopyFilesBuildPhase 配置结束 */
 
 /* PBXFileReference 配置开始 */
+		CA1000000000000000000031 /* DisplayBrightness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayBrightness.swift; sourceTree = "<group>"; };
 		CA1000000000000000000021 /* DiagnosticLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLog.swift; sourceTree = "<group>"; };
 		CA1000000000000000000011 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 		CA1000000000000000000001 /* ConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatus.swift; sourceTree = "<group>"; };
@@ -142,6 +144,7 @@
 				CA1000000000000000000001 /* ConnectionStatus.swift */,
 				CA1000000000000000000011 /* SettingsWindow.swift */,
 				CA1000000000000000000021 /* DiagnosticLog.swift */,
+				CA1000000000000000000031 /* DisplayBrightness.swift */,
 				3DD4B653226C1C3200451B7B /* AppDelegate.swift */,
 				3DC0BC6922728FF1001145EC /* Info.plist */,
 				3DCAAA7C22ADE9830011A2DA /* checkUpdate.swift */,
@@ -303,6 +306,7 @@
 				CA1000000000000000000002 /* ConnectionStatus.swift（源码） */,
 				CA1000000000000000000012 /* SettingsWindow.swift（源码） */,
 				CA1000000000000000000022 /* DiagnosticLog.swift（源码） */,
+				CA1000000000000000000032 /* DisplayBrightness.swift（源码） */,
 				3DD4B654226C1C3200451B7B /* AppDelegate.swift（源码） */,
 				3DD4B666226C1DF200451B7B /* BLE.swift（源码） */,
 				3DD4B664226C1CF000451B7B /* lowlevel.c（源码） */,

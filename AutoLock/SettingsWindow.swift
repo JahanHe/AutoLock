@@ -230,6 +230,7 @@ extension AppDelegate {
         if key == "watchCompatible", enabled { prefs.set(true, forKey: "wakeWithoutUnlocking") }
         if key == "wakeWithoutUnlocking" || key == "watchCompatible" { unlockTimer?.invalidate() }
         if key == "wakeOnProximity", !enabled { wakeTimer?.invalidate() }
+        if key == "dimOnLock", !enabled { restoreDisplayBrightness() }
         if key == "showDockIcon" || key == "hideDockWhenClosed" { updateDockVisibility() }
         if key == "lockOnSignalLoss" {
             ble.lockOnSignalLoss = enabled
@@ -244,7 +245,7 @@ extension AppDelegate {
     func optionName(_ key: String) -> String {
         ["passiveMode": "被动模式", "wakeWithoutUnlocking": "仅唤醒不输入密码", "watchCompatible": "Apple Watch 兼容模式",
          "wakeOnProximity": "靠近唤醒", "showStatusLight": "状态灯", "showStatusIcon": "锁图标", "showStatusRSSI": "菜单栏信号值",
-         "sleepDisplay": "锁定后关屏", "screensaver": "锁定后屏保", "pauseItunes": "离开暂停媒体", "resumeMedia": "解锁后恢复媒体",
+         "dimOnLock": "锁定后降低亮度", "screensaver": "锁定后屏保", "pauseItunes": "离开暂停媒体", "resumeMedia": "解锁后恢复媒体",
          "lockNotifications": "锁定通知", "checkUpdates": "版本检查", "showSettingsOnLaunch": "启动时显示窗口",
          "colorStatusIcon": "状态颜色融入锁图标", "showDockIcon": "显示 Dock 图标", "hideDockWhenClosed": "关窗后隐藏 Dock 图标",
          "pauseAfterManualUnlock": "手动解锁后等待设备", "keepDisplayAwake": "附近保持亮屏", "lockOnSignalLoss": "断连后自动锁定", "disconnectNotifications": "断连通知"][key] ?? "选项"
@@ -304,6 +305,7 @@ extension AppDelegate {
             ble.configureSignalLossLock()
             if ble.signalLossID != nil { notifiedSignalLoss = nil; signalLossChanged() }
             recordEvent("断连提醒后的锁定等待时间设为 \(Int(ble.signalLossLockDelay)) 秒；未选择本次跳过时立即应用。")
+        case "dimBrightness": prefs.set(max(1, min(30, number)), forKey: key)
         case "thresholdRSSI":
             ble.thresholdRSSI = max(-95, min(-30, number)); prefs.set(ble.thresholdRSSI, forKey: key)
         case "lightSize": prefs.set(max(6, min(12, number)), forKey: key)
@@ -328,7 +330,7 @@ extension AppDelegate {
         if report || wasGranted != accessibilityGranted {
             recordEvent(accessibilityGranted ? "辅助功能权限复查：当前运行进程已获得授权。" : "辅助功能权限复查：当前运行进程未获得授权；请核对系统列表中的应用与当前版本。")
         }
-        screenLocked = isScreenLocked()
+        refreshSystemScreenState()
         if let requested = lockRequestAt {
             if screenLocked {
                 confirmLockRequest()
@@ -385,30 +387,44 @@ extension AppDelegate {
         }
     }
 
-    func turnOffDisplay() {
-        guard !isPreview else { return }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
-        process.arguments = ["displaysleepnow"]
-        process.terminationHandler = { process in
-            DispatchQueue.main.async {
-                self.recordEvent(process.terminationStatus == 0 ? "系统已接受关闭显示器命令。" : "关闭显示器命令失败，退出代码：\(process.terminationStatus)。")
-            }
+    var brightnessScreens: [DisplayBrightness.Screen] {
+        NSScreen.screens.compactMap { screen in
+            guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+                  let uuid = CGDisplayCreateUUIDFromDisplayID(number.uint32Value)?.takeRetainedValue() else { return nil }
+            let key = CFUUIDCreateString(nil, uuid) as String
+            return (number.uint32Value, key, screen.localizedName)
         }
-        do { try process.run() } catch { feedback = "关闭屏幕失败：\(error.localizedDescription)"; recordEvent(feedback); refreshStatus() }
+    }
+
+    func dimDisplay() {
+        guard !isPreview else { return }
+        let level = Float(max(1, min(30, prefs.integer(forKey: "dimBrightness")))) / 100
+        let messages = brightness.dim(brightnessScreens, to: level)
+        lastBrightnessResult = messages.joined(separator: "\n")
+        messages.forEach(recordEvent)
+        refreshStatus()
+    }
+
+    func restoreDisplayBrightness() {
+        guard !isPreview, !brightness.saved.isEmpty else { return }
+        let messages = brightness.restore(brightnessScreens)
+        if !messages.isEmpty { lastBrightnessResult = messages.joined(separator: "\n") }
+        messages.forEach(recordEvent)
+        refreshStatus()
     }
 
     func testEffect(_ effect: String) {
         if isPreview {
-            previewScenario = ["锁定", "关闭屏幕", "屏保", "锁定后测试靠近"].contains(effect) ? 1 : 0
+            previewScenario = ["锁定", "调暗屏幕", "屏保", "锁定后测试靠近"].contains(effect) ? 1 : 0
             feedback = "演示：\(effect)效果已预览，没有执行真实系统操作。"; recordEvent(feedback); refreshStatus(); return
         }
         feedback = "已请求\(effect)，请观察系统实际效果。"
         recordEvent("用户发起效果测试：\(effect)。")
         switch effect {
         case "锁定": lockNow()
-        case "关闭屏幕": turnOffDisplay()
-        case "唤醒屏幕": wakeDisplay()
+        case "调暗屏幕": dimDisplay()
+        case "恢复亮度": restoreDisplayBrightness()
+        case "唤醒屏幕": restoreDisplayBrightness(); _ = requestDisplayWake()
         case "屏保": startScreensaver()
         case "暂停播放": MRMediaRemoteSendCommand(MRCommandPause, nil)
         case "恢复播放": MRMediaRemoteSendCommand(MRCommandPlay, nil)
@@ -444,7 +460,7 @@ extension AppDelegate {
                 self.testingUnlock = false
                 guard self.status.healthy, self.ble.presence else { return }
                 self.manualLock = false
-                if self.returnPolicy.wake { wakeDisplay() }
+                if self.returnPolicy.wake { self.reachedWakeRange() }
                 self.tryUnlockScreen()
             }
         default: break
@@ -496,11 +512,19 @@ extension AppDelegate {
         setReturnEnabled(false); setNumber("lockRSSI", -20); setReturnEnabled(true)
         check(ble.unlockRSSI >= ble.lockRSSI + 5, "重新打开返回仍需保持门槛间隔")
         check(ble.centralMgr == nil, "预览不得创建蓝牙管理器")
-        for effect in ["锁定", "关闭屏幕", "唤醒屏幕", "屏保", "暂停播放", "恢复播放", "通知", "断连通知", "锁定后测试靠近"] {
+        for effect in ["锁定", "调暗屏幕", "唤醒屏幕", "屏保", "暂停播放", "恢复播放", "通知", "断连通知", "锁定后测试靠近"] {
             testEffect(effect)
             check(lockRequestAt == nil && unlockTimer == nil && !testingUnlock, "预览按钮不得发出系统请求")
         }
         check(fetchPassword() == nil, "预览不得读取密码")
+        setNumber("dimBrightness", 0)
+        check(prefs.integer(forKey: "dimBrightness") == 1, "最低亮度不能为零，避免主动调黑屏幕")
+        setNumber("dimBrightness", 100)
+        check(prefs.integer(forKey: "dimBrightness") == 30, "调暗亮度范围必须有界")
+        setNumber("dimBrightness", 5); setOption("dimOnLock", true)
+        dimDisplay(); restoreDisplayBrightness()
+        check(brightness.saved.isEmpty && !brightness.isDimmed, "隔离预览不得调节真实屏幕亮度")
+        check(quickMenuItems["dimOnLock"]?.state == .on && quickMenuItems["sleepDisplay"] == nil, "菜单使用降低亮度选项，不提供主动关屏")
         setNumber("unlockRSSI", -60); setNumber("wakeRSSI", -90)
         check(ble.wakeRSSI == -90 && ble.unlockRSSI == -60, "亮屏与密码解锁门槛可以分开设置")
         let protectedLock = ble.lockRSSI
@@ -631,9 +655,10 @@ extension AppDelegate {
         panel.nameFieldStringValue = "AutoLock-诊断.zip"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         var settings: [String: Any] = [:]
-        for key in ["passiveMode", "wakeWithoutUnlocking", "watchCompatible", "wakeOnProximity", "sleepDisplay", "screensaver", "pauseItunes", "resumeMedia", "lockNotifications", "checkUpdates", "showSettingsOnLaunch", "showStatusLight", "showStatusIcon", "showStatusRSSI", "colorStatusIcon", "showDockIcon", "hideDockWhenClosed", "keepDisplayAwake", "lockOnSignalLoss", "disconnectNotifications", "pauseAfterManualUnlock"] {
+        for key in ["passiveMode", "wakeWithoutUnlocking", "watchCompatible", "wakeOnProximity", "dimOnLock", "screensaver", "pauseItunes", "resumeMedia", "lockNotifications", "checkUpdates", "showSettingsOnLaunch", "showStatusLight", "showStatusIcon", "showStatusRSSI", "colorStatusIcon", "showDockIcon", "hideDockWhenClosed", "keepDisplayAwake", "lockOnSignalLoss", "disconnectNotifications", "pauseAfterManualUnlock"] {
             settings[optionName(key)] = prefs.bool(forKey: key)
         }
+        settings["锁定后亮度百分比"] = prefs.integer(forKey: "dimBrightness")
         settings["自动锁定"] = ble.lockRSSI != ble.LOCK_DISABLED
         settings["靠近动作"] = ble.unlockRSSI != ble.UNLOCK_DISABLED
         settings["远离门槛"] = ble.lockRSSI
@@ -647,7 +672,7 @@ extension AppDelegate {
             "监测状态": status.title, "采样方式": monitorModeDescription, "屏幕已锁定": screenLocked,
             "辅助功能权限": accessibilityGranted, "密码是否已保存": hasPassword,
             "附近保持亮屏已生效": displayAssertion != 0, "保持亮屏错误": displayAssertionError ?? "暂无",
-            "解锁后等待设备": ble.waitingForDeviceAfterUnlock, "最近亮屏结果": lastWakeResult,
+            "解锁后等待设备": ble.waitingForDeviceAfterUnlock, "最近亮屏结果": lastWakeResult, "亮度状态": lastBrightnessResult, "待恢复亮度的屏幕数": brightness.saved.count,
             "断连策略状态": signalLossSummary, "通知权限": notificationPermission,
             "最近操作错误": lastActionError ?? "暂无", "日志状态": diagnosticStatus, "功能设置": settings]
         do {
@@ -740,9 +765,21 @@ extension AppDelegate {
         var glassColors: [String: [CGFloat]] = [:]
         let scenes: [(String, SettingsPage)] = [("浅色", .overview), ("深色", .overview), ("设备", .device),
             ("离开锁定", .lock), ("靠近与解锁", .returning), ("分段亮屏", .tests), ("菜单栏外观", .appearance), ("其他设置", .extras), ("效果测试", .tests), ("运行记录", .activity), ("失联", .overview), ("已锁定", .overview), ("已关屏", .overview), ("屏保", .overview), ("透明对照", .overview), ("解锁暂停", .overview)]
-        for (offset, scene) in scenes.enumerated() {
-            let (name, page) = scene
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(offset * 3 + 2)) {
+        func finishCapture() {
+            if composited {
+                let difference = zip(glassColors["浅色"] ?? [], glassColors["透明对照"] ?? []).map { abs($0 - $1) }.max() ?? 0
+                let result: [String: Any] = ["标题区域背景色差": difference, "透背景检查通过": difference > 0.05, "采样颜色": glassColors]
+                if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                    try? data.write(to: directory.appendingPathComponent("透明检查.json"))
+                }
+                precondition(difference > 0.05, "切换窗口后方背景时，标题区必须有可见颜色变化")
+            }
+            backdrop?.close(); NSApp.terminate(nil)
+        }
+        func captureScene(_ offset: Int) {
+            guard offset < scenes.count else { finishCapture(); return }
+            let (name, page) = scenes[offset]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.settingsWindow?.appearance = NSAppearance(named: offset == 1 ? .darkAqua : .aqua)
                 if let backdrop = backdrop, let window = self.settingsWindow {
                     backdrop.backgroundColor = name == "透明对照" ? .systemOrange : .systemBlue
@@ -784,20 +821,11 @@ extension AppDelegate {
                        let bitmap = NSBitmapImageRep(data: data) {
                         try? bitmap.representation(using: .png, properties: [:])?.write(to: directory.appendingPathComponent("菜单灯-\(name).png"))
                     }
+                    captureScene(offset + 1)
                 }
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(scenes.count * 3 + 2)) {
-            if composited {
-                let difference = zip(glassColors["浅色"] ?? [], glassColors["透明对照"] ?? []).map { abs($0 - $1) }.max() ?? 0
-                let result: [String: Any] = ["标题区域背景色差": difference, "透背景检查通过": difference > 0.05, "采样颜色": glassColors]
-                if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
-                    try? data.write(to: directory.appendingPathComponent("透明检查.json"))
-                }
-                precondition(difference > 0.05, "切换窗口后方背景时，标题区必须有可见颜色变化")
-            }
-            backdrop?.close(); NSApp.terminate(nil)
-        }
+        captureScene(0)
     }
 }
 
@@ -924,6 +952,7 @@ struct SettingsView: View {
         case .lock:
             switchRow("自动锁定", "", binding: Binding(get: { app.ble.lockRSSI != app.ble.LOCK_DISABLED }, set: app.setAutomaticLock))
             option("pauseAfterManualUnlock", "手动解锁后等待设备", "")
+            option("dimOnLock", "锁定后降低亮度", "")
             option("disconnectNotifications", "断连通知", "")
             option("lockOnSignalLoss", "断连后自动锁定", "")
         case .returning:
@@ -1124,9 +1153,10 @@ struct SettingsView: View {
                 SettingExplanation(text: "总等待时间＝无信号确认时间＋提醒后的等待时间。取消本次只持续到设备恢复信号，不会永久关闭自动保护。").font(.caption).foregroundStyle(.secondary)
             }
             card("锁定后的显示", icon: "display") {
-                option("sleepDisplay", "锁定后关闭屏幕", "先锁定，再关闭屏幕。开启后更适合测试靠近唤醒与 Apple Watch 解锁。")
+                option("dimOnLock", "锁定后降低亮度", "系统确认锁定后降到低亮度，默认 5%，不发送关屏命令。靠近、手动解锁、关闭此选项或退出时恢复原亮度；若你已重新调整亮度则保留你的选择。支持内置屏及部分 Apple 显示器，不支持的外接屏保持原状并显示原因。")
+                number("dimBrightness", "锁定后亮度", "保留可见内容，可设置为 1% 至 30%。调暗后防止空闲关屏；主动睡眠与合盖仍由 macOS 决定。", value: app.prefs.integer(forKey: "dimBrightness"), range: 1 ... 30, unit: "%")
                 Divider()
-                option("screensaver", "锁定后启动屏幕保护程序", "始终先执行锁定，不再用屏保替代锁定；关闭屏幕开启时优先关闭屏幕。")
+                option("screensaver", "锁定后启动屏幕保护程序", "始终先执行锁定，不再用屏保替代锁定；降低亮度开启时优先降低亮度。")
             }
             SettingExplanation(text: "手动点击“立即锁定”后，设备仍在身边时不会马上被本应用重新解锁；离开再回来才会触发靠近动作。")
                 .font(.caption).foregroundStyle(.secondary)
@@ -1257,8 +1287,8 @@ struct SettingsView: View {
             card("真实系统效果", icon: "play.circle") {
                 Text("下列按钮会立即操作这台 Mac。锁屏测试前请确保你知道自己的登录密码。上方折叠区是模拟预览；右侧始终显示当前运行状态。")
                     .font(.callout).foregroundStyle(.secondary)
-                HStack { testButton("立即锁定", "锁定"); testButton("关闭屏幕", "关闭屏幕"); testButton("唤醒屏幕", "唤醒屏幕") }
-                HStack { testButton("启动屏保", "屏保"); testButton("测试通知", "通知") }
+                HStack { testButton("立即锁定", "锁定"); testButton("调暗屏幕", "调暗屏幕"); testButton("唤醒屏幕", "唤醒屏幕") }
+                HStack { testButton("恢复原亮度", "恢复亮度"); testButton("启动屏保", "屏保"); testButton("测试通知", "通知") }
                 HStack { testButton("暂停播放", "暂停播放"); testButton("恢复播放", "恢复播放") }
                 Divider()
                 Button("锁定，5 秒后测试靠近动作") { app.testEffect("锁定后测试靠近") }
@@ -1266,7 +1296,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             card("建议验收顺序", icon: "checklist") {
-                Text("1. 确认状态绿灯，点击“立即锁定”检查锁屏。\n\n2. 正常解锁，携带所选设备离开，等待远离确认或失联超时。\n\n3. 开启“锁定后关闭屏幕”和“靠近唤醒”，再次离开再回来。\n\n4. 保持 Apple Watch 兼容模式开启，佩戴已解锁的手表，观察系统解锁。")
+                Text("1. 确认状态绿灯，点击“立即锁定”检查锁屏。\n\n2. 正常解锁，携带所选设备离开，等待远离确认或失联超时。\n\n3. 开启“锁定后降低亮度”和“靠近亮屏”，再次离开再回来。\n\n4. 保持 Apple Watch 兼容模式开启，佩戴已解锁的手表，观察系统解锁。")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -1296,6 +1326,8 @@ struct SettingsView: View {
                     statusRow("监测方式", app.prefs.bool(forKey: "passiveMode") ? "被动广播" : "主动优先")
                     Divider()
                     if app.lockRequestAt != nil { statusRow("锁定请求", "等待系统确认") }
+                    statusRow("屏幕亮度", app.brightness.isDimmed ? "低亮度待机" : "正常／未调节")
+                    Text(app.lastBrightnessResult).font(.caption).foregroundStyle(.secondary)
                     statusRow("保持亮屏", app.prefs.bool(forKey: "keepDisplayAwake") ? (app.displayAssertion != 0 ? "生效中" : "待命") : "已关闭")
                     if let error = app.displayAssertionError { Text(error).foregroundStyle(.red) }
                     if app.ble.lockRSSI != app.ble.LOCK_DISABLED, let timer = app.ble.proximityTimer, timer.isValid {
@@ -1343,7 +1375,7 @@ struct SettingsView: View {
                 Spacer(minLength: 12)
                 HStack(spacing: 5) {
                     Image(systemName: screen.lit ? "sun.max.fill" : "moon.fill")
-                    Text(screen.lit ? (app.displayAssertion != 0 ? "保持亮屏中" : "屏幕已亮") : "屏幕已暗")
+                    Text(screen.lit ? (app.brightness.isDimmed ? "低亮度 · 未关屏" : (app.displayAssertion != 0 ? "保持亮屏中" : "屏幕已亮")) : "屏幕已暗")
                 }.font(.system(size: 10)).opacity(0.8).padding(.bottom, 12)
             }.foregroundStyle(screen.lit ? .white : Color(white: 0.62)).frame(height: 178)
                 .frame(maxWidth: .infinity)
@@ -1352,6 +1384,7 @@ struct SettingsView: View {
                         LinearGradient(colors: [Color(red: 0.12, green: 0.25, blue: 0.46), Color(red: 0.16, green: 0.48, blue: 0.57)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     } else { Color(white: 0.055) }
                 }
+                .brightness(app.brightness.isDimmed ? -0.25 : 0)
                 .clipShape(RoundedRectangle(cornerRadius: 9))
                 .padding(5).background(Color(white: 0.17), in: RoundedRectangle(cornerRadius: 13))
                 .overlay(RoundedRectangle(cornerRadius: 13).stroke(.primary.opacity(0.15)))

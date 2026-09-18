@@ -12,10 +12,10 @@ import json
 import sys
 folder = Path(sys.argv[1])
 report = json.loads((folder / '预览检查.json').read_text())
-assert report['隔离预览'] and report['设置检查通过'] == 69, '设置检查没有通过'
+assert report['隔离预览'] and report['设置检查通过'] == 73, '设置检查没有通过'
 navigation = json.loads((folder / '导航检查.json').read_text())
 assert navigation['目标分组'] == navigation['当前分组'] == '靠近与解锁', '展开后的分组跳转没有生效'
 for page in ['浅色', '深色', '设备', '离开锁定', '靠近与解锁', '分段亮屏', '菜单栏外观', '其他设置', '效果测试', '运行记录', '失联', '已锁定', '已关屏', '屏保', '透明对照', '解锁暂停']:
     assert (folder / f'设置窗口-{page}.png').stat().st_size > 1000, f'缺少有效截图：{page}'
-print('实际应用预览检查通过：69 项设置联动检查、1 项分组跳转检查，16 张窗口截图。')
+print('实际应用预览检查通过：73 项设置联动检查、1 项分组跳转检查，16 张窗口截图。')
 PY

@@ -352,6 +352,49 @@ do {
         preconditionFailure("日志错误不得静默吞掉")
     } catch { check(true, "日志写入失败会返回给界面显示") }
 }
+// 用模拟屏幕驱动真实亮度事务，不改变这台 Mac 的实际亮度。
+do {
+    var levels: [UInt32: Float] = [1: 0.7, 2: 0.6]
+    var persisted: [String: DisplayBrightness.Snapshot] = [:]
+    var writes = 0, failWrite = false
+    let controller = DisplayBrightness(read: { (levels[$0] == nil ? 1000 : 0, levels[$0] ?? 0) }, write: { id, value in
+        check(!persisted.isEmpty, "改变屏幕前必须已经保存原亮度")
+        writes += 1
+        if failWrite { return 1 }
+        levels[id] = value; return 0
+    }, persist: { persisted = $0 })
+    let screens: [DisplayBrightness.Screen] = [(1, "内置屏UUID", "内置屏"), (3, "外接屏UUID", "不支持的外接屏")]
+    _ = controller.dim(screens, to: 0)
+    _ = controller.dim(screens, to: .nan)
+    check(writes == 0, "拒绝零亮度和非有限亮度，不能把屏幕调黑")
+    let messages = controller.dim(screens, to: 0.05)
+    check(levels[1] == 0.05 && controller.isDimmed, "支持的屏幕降为 5%")
+    check(messages.contains { $0.contains("不支持读取") } && levels[2] == 0.6, "不支持的外接屏保持原样并明确报告")
+    _ = controller.dim(screens, to: 0.1)
+    check(persisted["内置屏UUID"]?.original == 0.7, "重复调暗必须保留第一次原亮度")
+    failWrite = true
+    _ = controller.dim(screens, to: 0.2)
+    failWrite = false
+    _ = controller.restore(screens)
+    check(levels[1] == 0.7 && persisted.isEmpty && !controller.isDimmed, "恢复原亮度后清理恢复记录")
+    _ = controller.dim(screens, to: 0.05)
+    levels[1] = 0.4
+    _ = controller.restore(screens)
+    check(levels[1] == 0.4 && persisted.isEmpty, "用户主动改变亮度后不再覆盖用户选择")
+    levels[1] = 0.6; failWrite = true
+    _ = controller.dim(screens, to: 0.05)
+    check(!controller.isDimmed && !persisted.isEmpty, "设置失败不能显示调暗成功，并保留恢复线索")
+    failWrite = false
+    _ = controller.restore(screens)
+    check(levels[1] == 0.6 && persisted.isEmpty, "未改变的亮度无需错误回写")
+    _ = controller.dim(screens, to: 0.05)
+    let restarted = DisplayBrightness(saved: persisted, read: { (0, levels[$0] ?? 0) },
+        write: { levels[$0] = $1; return 0 }, persist: { persisted = $0 })
+    levels[4] = levels.removeValue(forKey: 1)
+    _ = restarted.restore([(4, "内置屏UUID", "内置屏")])
+    check(levels[4] == 0.6 && persisted.isEmpty, "重启后显示器编号变化也按稳定标识恢复")
+}
+
 if !failures.isEmpty {
     for message in failures { print("失败：\(message)") }
     exit(1)
