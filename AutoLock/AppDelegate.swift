@@ -383,7 +383,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject, NSWindowDe
               status.healthy, ble.withinWakeRange, wakeTimer?.isValid != true else { return }
         restoreDisplayBrightness()
         displaySleep = CGDisplayIsAsleep(CGMainDisplayID()) != 0
-        guard displaySleep else { return }
+        // 低亮度锁屏也声明用户返回，让 macOS 继续处理 Apple Watch 解锁。
+        guard displaySleep || screenLocked else { return }
         recordEvent("收到有效返回信号 \(ble.lastRawRSSI ?? 0) dBm，达到亮屏条件；密码门槛仍为 \(ble.unlockRSSI) dBm。")
         guard requestDisplayWake() else { return }
         var attempts = 1
